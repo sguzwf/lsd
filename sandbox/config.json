@@ -1,0 +1,48 @@
+{
+	"lsd_config" :
+	{
+		"config_version" : 1,
+		"message_timeout" : 10,
+		"socket_poll_timeout" : 2000,
+		"log_type" : "STDOUT_LOGGER",
+		"log_flags" : "PLOG_INFO | PLOG_DEBUG | PLOG_ERROR | PLOG_MSG_TYPES",
+		"log_file" : "/var/log/lsd.log",
+		"log_syslog_name" : "lsd_log",
+
+		"persistent_storage" :
+		{
+			"eblob_path" : "/home/rimz/eblob/messages",
+			"eblob_log_path" : "/tmp/lsd_eblob.log",
+			"eblob_log_flags" : 0,
+			"eblob_sync_interval" : 1
+		},
+		
+		"autodiscovery" :
+		{
+			"type" : "HTTP",
+			"multicast_ip" : "226.1.1.1",
+			"multicast_port" : 5555
+		},
+
+		"services" : [
+            {
+            	"name" : "karma-engine-testing",
+				"description" : "karma test service",
+				"app_name" : "karma-engine",
+				"hosts_url" : "http://deltax.dev.yandex.net",
+				"control_port" : 5000
+			},
+			
+			{
+            	"name" : "karma-engine-production",
+				"description" : "karma producion service",
+				"app_name" : "karma-engine2",
+				"hosts_url" : "http://delta2x.dev.yandex.net",
+				"control_port" : 5010
+			}
+		]
+	}
+}
+
+// retry interval for message untill droped
+// persistency type

@@ -1,7 +1,7 @@
 What the hell is it?
 ====================
 
-Lsd is a fast and lightweight multi-language multi-level persistant message queue and smart Cocained balancer built on top of ZeroMQ transport.
+Lsd is a fast and lightweight multi-language multi-level persistant message queue library and smart Cocained balancer built on top of ZeroMQ transport.
 
 Notable features:
 

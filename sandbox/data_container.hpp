@@ -1,0 +1,59 @@
+#ifndef _LSD_DATA_CONTAINER_HPP_INCLUDED_
+#define _LSD_DATA_CONTAINER_HPP_INCLUDED_
+
+#include <string>
+#include <stdexcept>
+#include <sys/time.h>
+
+#include <boost/shared_ptr.hpp>
+#include <boost/detail/atomic_count.hpp>
+
+#include "structs.hpp"
+
+namespace lsd {
+
+class data_container {
+
+public:
+	data_container();
+	data_container(unsigned char* data, size_t size);
+
+	data_container(const data_container& dc);
+	virtual ~data_container();
+	
+	data_container& operator = (const data_container &rhs);
+	bool operator == (const data_container &rhs) const;
+	bool operator != (const data_container &rhs) const;
+
+	unsigned char* data() const;
+	size_t size() const;
+	bool empty() const;
+	void clear();
+
+private:
+	static const size_t SHA1_SIZE = 20; // size in bytes
+	static const size_t SHA1_CHUNK_SIZE = 8 * 512; // 512 kb
+	static const size_t SMALL_DATA_SIZE = 8 * 1024 * 1024; // 1 mb
+
+	typedef boost::detail::atomic_count reference_counter;
+	
+	void init();
+	void swap(data_container& other);
+	void sign_data(unsigned char* data, size_t& size, unsigned char signature[SHA1_SIZE]);
+
+private:
+	// data
+	unsigned char* data_;
+	size_t size_;
+
+	// data sha1 signature
+	bool signed_;
+	unsigned char signature_[SHA1_SIZE];
+
+	// data reference counter
+	boost::shared_ptr<reference_counter> ref_counter_;
+};
+
+} // namespace lsd
+
+#endif // _LSD_DATA_CONTAINER_HPP_INCLUDED_

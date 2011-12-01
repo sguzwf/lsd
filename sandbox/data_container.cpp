@@ -27,11 +27,34 @@ data_container::data_container() :
 	init();
 }
 
-data_container::data_container(unsigned char* data, size_t size) :
-	data_(data),
+data_container::data_container(const void* data, size_t size) :
+	data_((unsigned char*)data),
 	size_(size),
 	signed_(false)
 {
+	init_with_data((unsigned char*)data, size);
+}
+
+data_container::data_container(const data_container& dc) {
+	if (dc.empty()) {
+		init();
+		return;
+	}
+
+	data_ = dc.data_;
+	size_ = dc.size_;
+
+	if (dc.signed_) {
+		memcpy(signature_, dc.signature_, SHA1_SIZE);
+		signed_ = dc.signed_;
+	}
+
+	ref_counter_ = dc.ref_counter_;
+	++*ref_counter_;
+}
+
+void
+data_container::init_with_data(unsigned char* data, size_t size) {
 	init();
 
 	if (data == NULL || size == 0) {
@@ -59,30 +82,14 @@ data_container::data_container(unsigned char* data, size_t size) :
 	memcpy(data_, data, size);
 	++*ref_counter_;
 
+	size_ = size;
+
 	if (size <= SMALL_DATA_SIZE) {
 		return;
 	}
 
 	sign_data(data_, size_, signature_);
 	signed_ = true;
-}
-
-data_container::data_container(const data_container& dc) {
-	if (dc.empty()) {
-		init();
-		return;
-	}
-
-	data_ = dc.data_;
-	size_ = dc.size_;
-
-	if (dc.signed_) {
-		memcpy(signature_, dc.signature_, SHA1_SIZE);
-		signed_ = dc.signed_;
-	}
-
-	ref_counter_ = dc.ref_counter_;
-	++*ref_counter_;
 }
 
 void
@@ -112,6 +119,10 @@ data_container::init() {
 }
 
 data_container::~data_container() {
+	if (*ref_counter_ == 0) {
+		return;
+	}
+
 	--*ref_counter_;
 
 	if (data_ && *ref_counter_ == 0) {
@@ -120,13 +131,13 @@ data_container::~data_container() {
 }
 
 data_container&
-data_container::operator = (const data_container &rhs) {
+data_container::operator = (const data_container& rhs) {
 	data_container(rhs).swap(*this);
 	return *this;
 }
 
 bool
-data_container::operator == (const data_container &rhs) const {
+data_container::operator == (const data_container& rhs) const {
 	// data size differs?
 	if (size_ != rhs.size_) {
 		return false;
@@ -147,7 +158,7 @@ data_container::operator == (const data_container &rhs) const {
 }
 
 bool
-data_container::operator != (const data_container &rhs) const {
+data_container::operator != (const data_container& rhs) const {
 	return !(*this == rhs);
 }
 
@@ -158,6 +169,10 @@ data_container::empty() const {
 
 void
 data_container::clear() {
+	if (*ref_counter_ == 0) {
+		return;
+	}
+
 	--*ref_counter_;
 
 	if (data_ && *ref_counter_ == 0) {
@@ -167,9 +182,9 @@ data_container::clear() {
 	init();
 }
 
-unsigned char*
+void*
 data_container::data() const {
-	return data_;
+	return (void*)data_;
 }
 
 size_t

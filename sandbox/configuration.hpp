@@ -6,7 +6,7 @@
 #include <iostream>
 
 #include "structs.hpp"
-#include "globals.hpp"
+#include "service_info.hpp"
 #include "smart_logger.hpp"
 
 namespace lsd {
@@ -31,6 +31,8 @@ public:
 	unsigned int config_version() const;
 	unsigned long long message_timeout() const;
 	unsigned long long socket_poll_timeout() const;
+	size_t max_message_cache_size() const;
+	enum message_cache_type message_cache_type() const;
 	
 	enum logger_type logger_type() const;
 	unsigned int logger_flags() const;
@@ -47,7 +49,8 @@ public:
 	unsigned short multicast_port() const;
 	
 	const services_list_t& services_list() const;
-	service_info_t service_by_prefix(const std::string& service_prefix) const;
+	bool service_info_by_name(const std::string& name, service_info_t& info) const;
+	bool service_info_by_name(const std::string& name) const;
 	
 	friend std::ostream& operator<<(std::ostream& out, configuration& config);
 	
@@ -59,6 +62,8 @@ private:
 	// general
 	unsigned long long message_timeout_;
 	unsigned long long socket_poll_timeout_;
+	size_t max_message_cache_size_;
+	enum message_cache_type message_cache_type_;
 	
 	// logger
 	enum logger_type logger_type_;

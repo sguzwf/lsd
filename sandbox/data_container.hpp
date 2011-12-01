@@ -16,28 +16,28 @@ class data_container {
 
 public:
 	data_container();
-	data_container(unsigned char* data, size_t size);
-
+	data_container(const void* data, size_t size);
 	data_container(const data_container& dc);
 	virtual ~data_container();
 	
-	data_container& operator = (const data_container &rhs);
-	bool operator == (const data_container &rhs) const;
-	bool operator != (const data_container &rhs) const;
+	data_container& operator = (const data_container& rhs);
+	bool operator == (const data_container& rhs) const;
+	bool operator != (const data_container& rhs) const;
 
-	unsigned char* data() const;
+	void* data() const;
 	size_t size() const;
 	bool empty() const;
 	void clear();
 
 private:
 	static const size_t SHA1_SIZE = 20; // size in bytes
-	static const size_t SHA1_CHUNK_SIZE = 8 * 512; // 512 kb
-	static const size_t SMALL_DATA_SIZE = 8 * 1024 * 1024; // 1 mb
+	static const size_t SHA1_CHUNK_SIZE = 512 * 1024; // 512 kb
+	static const size_t SMALL_DATA_SIZE = 1024 * 1024; // 1 mb
 
 	typedef boost::detail::atomic_count reference_counter;
 	
 	void init();
+	void init_with_data(unsigned char* data, size_t size);
 	void swap(data_container& other);
 	void sign_data(unsigned char* data, size_t& size, unsigned char signature[SHA1_SIZE]);
 

@@ -10,7 +10,8 @@
 #include <curl/curl.h>
 
 #include "refresher.hpp"
-#include "globals.hpp"
+#include "host_info.hpp"
+#include "service_info.hpp"
 
 namespace lsd {
 

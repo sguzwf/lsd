@@ -139,7 +139,7 @@ http_heartbeats_collector::ping_service_hosts(const service_info_t& s_info, std:
 			std::vector<handle_info_t> host_handles;
 			
 			try {
-				parse_host_response(s_info.app_name_, reply_str, host_ip_str, host_handles);
+				parse_host_response(s_info, reply_str, host_ip_str, host_handles);
 			}
 			catch (const std::exception& ex) {
 				std::string error_msg = "heartbeat response parsing error for lsd app: " + s_info.name_;
@@ -281,7 +281,7 @@ http_heartbeats_collector::validate_host_handles(const service_info_t& s_info,
 }
 
 void
-http_heartbeats_collector::parse_host_response(const std::string& cocaine_app_name,
+http_heartbeats_collector::parse_host_response(const service_info_t& s_info,
 		const std::string& response,
 		const std::string& host_ip,
 		std::vector<handle_info_t>& handles)
@@ -312,13 +312,33 @@ http_heartbeats_collector::parse_host_response(const std::string& cocaine_app_na
         std::string parsed_app_name(*nm_it);
 
         // if this is the app we're pinging
-        if (parsed_app_name != cocaine_app_name) {
+        if (parsed_app_name != s_info.app_name_) {
         	continue;
         }
 
-    	//iterate through app handles
-    	Json::Value app_tasks(apps[cocaine_app_name]["tasks"]);
+        // is app running?
+        bool is_app_running = false;
+		Json::Value app(apps[s_info.app_name_]);
 
+		if (app.isObject()) {
+			is_app_running = app.get("running", false).asBool();
+		}
+		else {
+			std::string err_msg = "server (" + host_ip + "), app " + s_info.app_name_;
+			err_msg += " has bad json structure.";
+			logger_->log(PLOG_ERROR, err_msg);
+			continue;
+		}
+
+        if (!is_app_running) {
+        	std::string err_msg = "server (" + host_ip + "), app " + s_info.app_name_;
+			err_msg += " is not running.";
+			logger_->log(PLOG_ERROR, err_msg);
+			continue;
+        }
+
+    	//iterate through app handles
+    	Json::Value app_tasks(apps[s_info.app_name_]["tasks"]);
     	if (!app_tasks.isObject() || !app_tasks.size()) {
     		std::string err_msg = "server response could not be parsed at ";
 			err_msg += std::string(BOOST_CURRENT_FUNCTION) + " no handles found for app.";
@@ -366,26 +386,30 @@ http_heartbeats_collector::parse_host_response(const std::string& cocaine_app_na
 				}
 			}
 
-			handle_info_t s_handle(handle_name, instance, port);
+			handle_info_t s_handle(handle_name, port);
 
 			bool handle_ok = true;
 
-			// validate handle data
-			if (s_handle.instance_.empty()) {
+			// instance empty?
+			if (instance.empty()) {
 				handle_ok = false;
-				std::string err_msg = "server (" + host_ip + ") response handle could not be parsed at ";
-				err_msg += std::string(BOOST_CURRENT_FUNCTION);
-				err_msg += " handle instance is empty string " + handle_name;
-				err_msg += " for cocaine app " + cocaine_app_name;
+				std::string err_msg = "server (" + host_ip + ") handle instance is empty string " + handle_name;
+				err_msg += " for cocaine app " + s_info.app_name_;
 				logger_->log(PLOG_ERROR, err_msg);
 			}
 
+			// not our service instance?
+			if (instance != s_info.instance_) {
+				handle_ok = false;
+			}
+
+			// port undefined?
 			if (s_handle.port_ == 0) {
 				handle_ok = false;
-				std::string err_msg = "server (" + host_ip + ") response handle could not be parsed at ";
+				std::string err_msg = "server (" + host_ip + ") handle could not be parsed at ";
 				err_msg += std::string(BOOST_CURRENT_FUNCTION);
 				err_msg += " handle port is zero " + handle_name;
-				err_msg += " for cocaine app " + cocaine_app_name + " at host: " + host_ip;
+				err_msg += " for cocaine app " + s_info.app_name_ + " at host: " + host_ip;
 				logger_->log(PLOG_ERROR, err_msg);
 			}
 				

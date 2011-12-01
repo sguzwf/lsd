@@ -23,6 +23,7 @@ static const std::string DEFAULT_HOSTS_URL = "";
 static const unsigned short DEFAULT_CONTROL_PORT = 5555;
 static const std::string DEFAULT_MULTICAST_IP = "226.1.1.1";
 static const unsigned short DEFAULT_MULTICAST_PORT = 5556;
+static const size_t DEFAULT_MAX_MESSAGE_CACHE_SIZE = 512; // megabytes
 
 enum logger_type {
 	STDOUT_LOGGER = 1,
@@ -30,33 +31,120 @@ enum logger_type {
 	SYSLOG_LOGGER
 };
 
+enum autodiscovery_type {
+	AT_MULTICAST = 1,
+	AT_HTTP
+};
+
+enum message_cache_type {
+	RAM_ONLY = 1,
+	PERSISTANT
+};
+
+struct message_path {
+	message_path() {};
+	message_path(const std::string& service_name_,
+				 const std::string& handle_name_) :
+		service_name(service_name_),
+		handle_name(handle_name_) {};
+
+	message_path(const message_path& path) :
+		service_name(path.service_name),
+		handle_name(path.handle_name) {};
+
+	message_path& operator = (const message_path& rhs) {
+		if (this == &rhs) {
+			return *this;
+		}
+
+		service_name = rhs.service_name;
+		handle_name = rhs.handle_name;
+
+		return *this;
+	}
+
+	bool operator == (const message_path& mp) const {
+		return (service_name == mp.service_name &&
+				handle_name == mp.handle_name);
+	}
+
+	bool operator != (const message_path& mp) const {
+		return !(*this == mp);
+	}
+
+	size_t data_size() const {
+		return (service_name.length() + handle_name.length());
+	}
+
+	std::string service_name;
+	std::string handle_name;
+};
+
+struct message_policy {
+	message_policy() :
+		send_to_all_hosts(false),
+		urgent(false),
+		mailboxed(false),
+		timeout(0.0f),
+		deadline(0.0f) {};
+
+	message_policy(bool send_to_all_hosts_,
+				   bool urgent_,
+				   float mailboxed_,
+				   float timeout_,
+				   float deadline_) :
+		send_to_all_hosts(send_to_all_hosts_),
+		urgent(urgent_),
+		mailboxed(mailboxed_),
+		timeout(timeout_),
+		deadline(deadline_) {};
+
+	message_policy(const message_policy& mp) :
+		send_to_all_hosts(mp.send_to_all_hosts),
+		urgent(mp.urgent),
+		mailboxed(mp.mailboxed),
+		timeout(mp.timeout),
+		deadline(mp.deadline) {};
+
+	message_policy& operator = (const message_policy& rhs) {
+		if (this == &rhs) {
+			return *this;
+		}
+
+		send_to_all_hosts = rhs.send_to_all_hosts;
+		urgent = rhs.urgent;
+		mailboxed = rhs.mailboxed;
+		timeout = rhs.timeout;
+		deadline = rhs.deadline;
+
+		return *this;
+	}
+
+	bool operator == (const message_policy& mp) const {
+		return (send_to_all_hosts == mp.send_to_all_hosts &&
+				urgent == mp.urgent &&
+				mailboxed == mp.mailboxed &&
+				timeout == mp.timeout &&
+				deadline == mp.deadline);
+	}
+
+	bool operator != (const message_policy& mp) const {
+		return !(*this == mp);
+	}
+
+	bool send_to_all_hosts;
+    bool urgent;
+    bool mailboxed;
+    float timeout;
+    float deadline;
+};
+
 struct lsd_types {
 	typedef boost::uint32_t ip_addr;
 	typedef boost::uint16_t port;
 };
 
-
-struct host_heartbeat {
-	host_heartbeat() {		
-	}
-
-	//host_heartbeat(const std::string& ip, const std::string& hostname) : 
-	//host_(ip, hostname), last_heartbeat_time_(time(NULL)) {
-	//}
-	
-	//bool operator==(const host_heartbeat& heartbeat) {
-	//	return (host_ == heartbeat.host_);
-	//}
-
-	//host_info host_;
-	//time_t last_heartbeat_time_;
-};
-
-
-enum autodiscovery_type {
-	AT_MULTICAST = 1,
-	AT_HTTP
-};
+typedef lsd_types LT;
 
 } // namespace lsd
 

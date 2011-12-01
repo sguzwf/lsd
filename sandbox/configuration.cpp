@@ -1,16 +1,16 @@
 #include "settings.h"
 
+#include <fstream>
+#include <stdexcept>
+
 #include <boost/current_function.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/algorithm/string.hpp>
 
-#include <fstream>
-#include <stdexcept>
 #include "json/json.h"
 
 #include "configuration.hpp"
-#include "structs.hpp"
 
 namespace lsd {
 
@@ -18,6 +18,7 @@ configuration::configuration() :
 	version_ (0),
 	message_timeout_(MESSAGE_TIMEOUT),
 	socket_poll_timeout_(DEFAULT_SOCKET_POLL_TIMEOUT),
+	max_message_cache_size_(DEFAULT_MAX_MESSAGE_CACHE_SIZE),
 	logger_type_(STDOUT_LOGGER),
 	logger_flags_(PLOG_NONE),
 	eblob_path_(DEFAULT_EBLOB_PATH),
@@ -36,6 +37,7 @@ configuration::configuration(const std::string& path) :
 	version_ (0),
 	message_timeout_(MESSAGE_TIMEOUT),
 	socket_poll_timeout_(DEFAULT_SOCKET_POLL_TIMEOUT),
+	max_message_cache_size_(DEFAULT_MAX_MESSAGE_CACHE_SIZE),
 	logger_type_(STDOUT_LOGGER),
 	logger_flags_(PLOG_NONE),
 	eblob_path_(DEFAULT_EBLOB_PATH),
@@ -85,7 +87,24 @@ configuration::load(const std::string& path) {
 		version_ = config_value.get("config_version", 0).asUInt();
 		message_timeout_ = (unsigned long long)config_value.get("message_timeout", (int)MESSAGE_TIMEOUT).asInt();
 		socket_poll_timeout_ = (unsigned long long)config_value.get("socket_poll_timeout", (int)DEFAULT_SOCKET_POLL_TIMEOUT).asInt();
-		
+		max_message_cache_size_ = (size_t)config_value.get("max_message_cache_size", (int)DEFAULT_MAX_MESSAGE_CACHE_SIZE).asInt();
+		max_message_cache_size_ *= 1048576; // convert mb to bytes
+
+		std::string message_cache_type_str = config_value.get("message_cache_type", "RAM_ONLY").asString();
+
+		if (message_cache_type_str == "PERSISTANT") {
+			message_cache_type_ = PERSISTANT;
+		}
+		else if (message_cache_type_str == "RAM_ONLY") {
+			message_cache_type_ = RAM_ONLY;
+		}
+		else {
+			std::string error_str = "unknown message cache type: " + message_cache_type_str;
+			error_str += "message_cache_type property can only take RAM_ONLY or PERSISTANT as value. ";
+			error_str += "at " + std::string(BOOST_CURRENT_FUNCTION);
+			throw std::runtime_error(error_str);
+		}
+
 		std::string log_type = config_value.get("log_type", "STDOUT_LOGGER").asString();
 		
 		if (log_type == "STDOUT_LOGGER") {
@@ -129,6 +148,9 @@ configuration::load(const std::string& path) {
 			else if (flag == "PLOG_ALL") {
 				logger_flags_ |= PLOG_ALL;
 			}
+			else if (flag == "PLOG_MSG_TIME") {
+				logger_flags_ |= PLOG_MSG_TIME;
+			}
 		}
 		
 		logger_file_path_  = config_value.get("log_file", "").asString();
@@ -163,6 +185,7 @@ configuration::load(const std::string& path) {
 			si.description_ = service_value.get("description", "").asString();
 			si.name_ = service_value.get("name", "").asString();
 			si.app_name_ = service_value.get("app_name", "").asString();
+			si.instance_ = service_value.get("instance", "").asString();
 			si.hosts_url_ = service_value.get("hosts_url", "").asString();
 			si.control_port_ = service_value.get("control_port", DEFAULT_CONTROL_PORT).asUInt();
 			
@@ -175,6 +198,10 @@ configuration::load(const std::string& path) {
 				throw std::runtime_error("service with no application name was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 			
+			if (si.instance_.empty()) {
+				throw std::runtime_error("service with no instance was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+			}
+
 			if (si.hosts_url_.empty()) {
 				throw std::runtime_error("service with no hosts_url was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
@@ -184,8 +211,6 @@ configuration::load(const std::string& path) {
 			}
 			
 			// check for duplicate services
-
-			// no service can have the same name
 			std::map<std::string, service_info_t>::iterator it = services_list_.begin();
 			for (;it != services_list_.end(); ++it) {
 				if (it->second.name_ == si.name_) {
@@ -196,18 +221,21 @@ configuration::load(const std::string& path) {
 			// no service can have the same app_name + control_port
 			it = services_list_.begin();
 			for (;it != services_list_.end(); ++it) {
-				if (it->second.app_name_ == si.app_name_ && it->second.control_port_ == si.control_port_) {
-					std::string err_msg = "duplicate service with app name " + si.app_name_ + " and ";
-					err_msg += "control port " + boost::lexical_cast<std::string>(si.control_port_) + " was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION);
-					throw std::runtime_error(err_msg);
+				if (it->second == si) {
+					std::string error_msg = "duplicate service with app name " + si.app_name_ + " and ";
+					error_msg += "control port " + boost::lexical_cast<std::string>(si.control_port_) + " was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION);
+					throw std::runtime_error(error_msg);
 				}
 			}
 
 			services_list_[si.name_] = si;
 		}
 	}
-	catch (...) {
-		throw std::runtime_error("config file: " + path + " could not be parsed at: " + std::string(BOOST_CURRENT_FUNCTION));
+	catch (const std::exception& ex) {
+		std::string error_msg = "config file: " + path + " could not be parsed. details: ";
+		error_msg += ex.what();
+		error_msg += " at: " + std::string(BOOST_CURRENT_FUNCTION);
+		throw std::runtime_error(error_msg);
 	}
 }
 
@@ -229,6 +257,16 @@ configuration::message_timeout() const {
 unsigned long long
 configuration::socket_poll_timeout() const {
 	return socket_poll_timeout_;
+}
+
+size_t
+configuration::max_message_cache_size() const {
+	return max_message_cache_size_;
+}
+
+enum message_cache_type
+configuration::message_cache_type() const {
+	return message_cache_type_;
 }
 
 enum logger_type
@@ -291,16 +329,27 @@ configuration::services_list() const {
 	return services_list_;
 }
 
-service_info_t
-configuration::service_by_prefix(const std::string& service_prefix) const {
-	std::map<std::string, service_info_t>::const_iterator it = services_list_.find(service_prefix);
+bool
+configuration::service_info_by_name(const std::string& name, service_info_t& info) const {
+	std::map<std::string, service_info_t>::const_iterator it = services_list_.find(name);
 	
 	if (it != services_list_.end()) {
-		return it->second;
+		info = it->second;
+		return true;
 	}
-	else {
-		throw std::runtime_error("no info for service with prefix " + service_prefix + " at: " + std::string(BOOST_CURRENT_FUNCTION));
+
+	return false;
+}
+
+bool
+configuration::service_info_by_name(const std::string& name) const {
+	std::map<std::string, service_info_t>::const_iterator it = services_list_.find(name);
+
+	if (it != services_list_.end()) {
+		return true;
 	}
+
+	return false;
 }
 
 std::ostream& operator<<(std::ostream& out, configuration& config) {

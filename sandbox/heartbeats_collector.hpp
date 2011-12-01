@@ -9,7 +9,9 @@
 #include <boost/bind.hpp>
 
 #include "smart_logger.hpp"
-#include "globals.hpp"
+#include "structs.hpp"
+#include "host_info.hpp"
+#include "handle_info.hpp"
 #include "configuration.hpp"
 
 namespace lsd {

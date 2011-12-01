@@ -6,38 +6,27 @@
 
 #include "client_impl.hpp"
 #include "http_heartbeats_collector.hpp"
+#include "error.hpp"
+#include "cached_message.hpp"
 
 namespace lsd {
 
-client_impl::client_impl(const std::string& config_path) :
-	is_running_(false)
-{
+client_impl::client_impl(const std::string& config_path) {
 	// create lsd context
 	std::string ctx_error_msg = "could not create lsd context at: " + std::string(BOOST_CURRENT_FUNCTION) + " ";
 
 	try {
-		context_.reset(new context(config_path));
+		context_.reset(new lsd::context(config_path));
 	}
 	catch (const std::exception& ex) {
 		throw std::runtime_error(ctx_error_msg + ex.what());
 	}
 
-	if (!context_.get()) {
-		throw std::runtime_error(ctx_error_msg);
-	}
-
-	// get config
-	boost::shared_ptr<configuration> conf = context_->config();
-	if (!conf.get()) {
-		throw std::runtime_error("configuration object is empty at: " + std::string(BOOST_CURRENT_FUNCTION));
-	}
-
 	// create services
-	const configuration::services_list_t& services_info_list = conf->services_list();
+	const configuration::services_list_t& services_info_list = config()->services_list();
 	configuration::services_list_t::const_iterator it = services_info_list.begin();
 	for (; it != services_info_list.end(); ++it) {
-		boost::shared_ptr<service_t> service_ptr(new service_t(it->second, context_->zmq_context()));
-		service_ptr->set_logger(context_->logger());
+		boost::shared_ptr<service_t> service_ptr(new service_t(it->second, context_));
 		services_[it->first] = service_ptr;
 	}
 
@@ -45,12 +34,7 @@ client_impl::client_impl(const std::string& config_path) :
 }
 
 client_impl::~client_impl() {
-	//heartbeats_collector_.reset(NULL);
-	
-	//is_running_ = false;
-	//thread_.join();
-
-	//updated_groups_.clear();
+	heartbeats_collector_.reset(NULL);
 }
 
 void
@@ -74,14 +58,11 @@ client_impl::connect() {
 		// 2 DO
 	}
 	else if (conf->autodiscovery_type() == AT_HTTP) {
-		heartbeats_collector_.reset(new http_heartbeats_collector(conf, context_->zmq_context()));
+		heartbeats_collector_.reset(new http_heartbeats_collector(conf, context()->zmq_context()));
 		heartbeats_collector_->set_callback(boost::bind(&client_impl::service_hosts_pinged_callback, this, _1, _2, _3));
-		heartbeats_collector_->set_logger(context_->logger());
+		heartbeats_collector_->set_logger(logger());
 		heartbeats_collector_->run();
 	}
-
-	//is_running_ = true;
-	//thread_ = boost::thread(&server_impl::process_sockets, this);
 }
 
 void
@@ -90,7 +71,10 @@ client_impl::disconnect() {
 }
 
 void
-client_impl::service_hosts_pinged_callback(const service_info_t& s_info, const std::vector<host_info_t>& hosts, const std::vector<handle_info_t>& handles) {
+client_impl::service_hosts_pinged_callback(const service_info_t& s_info,
+										   const std::vector<host_info_t>& hosts,
+										   const std::vector<handle_info_t>& handles)
+{
 	// find corresponding service
 	services_map_t::iterator it = services_.find(s_info.name_);
 
@@ -112,126 +96,149 @@ client_impl::service_hosts_pinged_callback(const service_info_t& s_info, const s
 	}
 }
 
-/*
-void
-server_impl::process_sockets() {
-	while (is_running_) {
-		if (!updated_groups_.empty()) {
-			logger()->log(PLOG_DEBUG, "updated_groups: %d", updated_groups_.size());
-			
-			// get updated groups
-			std::vector<std::string> groups;
-			
-			boost::mutex mutex;
-			{
-				boost::mutex::scoped_lock lock(mutex);
-				std::swap(updated_groups_, groups);
-			}
+std::string
+client_impl::send_message(const void* data,
+						  size_t size,
+						  const std::string& service_name,
+						  const std::string& handle_name)
+{
+	message_path mpath(service_name, handle_name);
+	message_policy mpolicy;
+	return send_message(data, size, mpath, mpolicy);
+}
 
-			// update server sockets
-			for (size_t i = 0; i < groups.size(); ++i) {
-				if (heartbeats_collector_.get()) {
-					std::vector<host_info> hosts;// = heartbeats_collector_->get_hosts_by_group(groups[i]);
-					
-					// find existing socket
-					server_sockets_map::iterator it = server_sockets_.find(groups[i]);
-					
-					if (!hosts.empty()) {
-						if (it != server_sockets_.end()) {
-							logger()->log("update hosts for group: %s", groups[i].c_str());
+std::string
+client_impl::send_message(const void* data,
+						  size_t size,
+						  const message_path& path)
+{
+	message_policy mpolicy;
+	return send_message(data, size, path, mpolicy);
+}
 
-							if (NULL == it->second.get()) {
-								std::string error_msg = "server socket ptr for hosts group \"";
-								error_msg += groups[i] + "\" is NULL! method - server::process_sockets()";
-								throw std::runtime_error(error_msg);
-							}
+std::string
+client_impl::send_message(const void* data,
+						  size_t size,
+						  const message_path& path,
+						  const message_policy& policy)
+{
+	// make sure we are not overcapacitated
+	size_t message_size = size + sizeof(cached_message) + cached_message::UUID_SIZE + path.data_size();
+	size_t new_resulting_size = messages_cache_size() + message_size;
 
-							it->second->update_socket_hosts(hosts);
-							it->second->wake_up();
-						}
-						else {
-							logger()->log("create socket for group: %s", groups[i].c_str());
+	if (new_resulting_size > config()->max_message_cache_size()) {
+		throw error(LSD_MESSAGE_CACHE_OVER_CAPACITY_ERROR, "can not send message, balancer over capacity.");
+	}
 
-							// if there exists such service in config, create new server socket and start it
-							service_inf si;
-							bool service_info_retrieved = true;
-							try {
-								si =context_->config()->service_by_prefix(groups[i]);
-							}
-							catch (...) {
-								service_info_retrieved = false;
-							}
-							
-							if (service_info_retrieved) {
-								boost::shared_ptr<server_socket> ss_ptr;
-								ss_ptr.reset(new server_socket(si, hosts, context_));
-								server_sockets_[groups[i]] = ss_ptr;
-								ss_ptr->wake_up();
-							}
-						}
-					}
-					else {
-						if (it != server_sockets_.end()) {
-							logger()->log("kill socket for group: %s", groups[i].c_str());
-							it->second.reset();
-							server_sockets_.erase(it);
-						}
-					}
+	// validate message path
+	if (!config()->service_info_by_name(path.service_name)) {
+		std::string error_str = "message sent to unknown service, check your config file.";
+		error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
+		throw error(LSD_UNKNOWN_SERVICE_ERROR, error_str);
+	}
 
-					logger()->log(PLOG_DEBUG, "server sockets count: %d", server_sockets_.size());
-				}
-			}
+	// find service to send message to
+	std::string uuid;
+	services_map_t::iterator it = services_.find(path.service_name);
+
+	if (it != services_.end()) {
+		boost::shared_ptr<cached_message> msg;
+		msg.reset(new cached_message(path, policy, data, size));
+		uuid = msg->uuid();
+
+		// send message
+		if (it->second.get()) {
+			it->second->send_message(msg);
+		}
+		else {
+			std::string error_str = "object for service wth name " + path.service_name;
+			error_str += " is emty at " + std::string(BOOST_CURRENT_FUNCTION);
+			throw error(error_str);
 		}
 	}
+	else {
+		std::string error_str = "no service wth name " + path.service_name;
+		error_str += " found at " + std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_str);
+	}
+
+	// return message uuid
+	return uuid;
+}
+
+std::string
+client_impl::send_message(const std::string& data,
+						  const std::string& service_name,
+						  const std::string& handle_name)
+{
+	message_path mpath(service_name, handle_name);
+	message_policy mpolicy;
+	return send_message(data, mpath, mpolicy);
+}
+
+std::string
+client_impl::send_message(const std::string& data,
+						  const message_path& path)
+{
+	message_policy mpolicy;
+	return send_message(data, path, mpolicy);
+}
+
+std::string
+client_impl::send_message(const std::string& data,
+						  const message_path& path,
+						  const message_policy& policy)
+{
+	return send_message(data.c_str(), data.length(), path, policy);
 }
 
 void
-server_impl::clients_group_changed(const std::string& group_name) {
-	updated_groups_.push_back(group_name);
+client_impl::set_response_callback(boost::function<void(const std::string&, void* data, size_t size)> callback)
+{
+	response_callback_ = callback;
 }
 
-void
-server_impl::send_message(const std::string& msg) {
-	// get a list of all services, send to all
-	std::map<std::string, service_inf>::const_iterator it = context_->config()->services_list().begin();
-	for (; it != context_->config()->services_list().end(); ++it) {
-		//context_->storage()->add_message(msg, it->second.prefix_);
+boost::shared_ptr<context>
+client_impl::context() {
+	if (!context_.get()) {
+		throw error("lsd context object is empty at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
+
+	return context_;
 }
-
-void
-server_impl::send_message(const std::string& msg, const std::vector<std::string>& services) {
-	if (services.empty()) {
-		return;
-	}
-
-	for (size_t i = 0; i < services.size(); ++i) {
-		if (context_->validate_service_prefix(services[i])) {
-			context_->storage()->add_message(msg, services[i]);
-		}
-	}
-}
-
-void
-server_impl::send_message(const std::string& msg, const std::string& service_prefix) {
-	// drop messages sent to unknown services
-	if (!context_->validate_service_prefix(service_prefix)) {
-		return;
-	}
-
-	context_->storage()->add_message(msg, service_prefix);
-
-	// wake up corresponding socket
-	server_sockets_map::iterator it = server_sockets_.find(service_prefix);
-	if (it != server_sockets_.end()) {
-		it->second->wake_up();
-	}
-}
-*/
 
 boost::shared_ptr<base_logger>
 client_impl::logger() {
-	return context_->logger();
+	return context()->logger();
+}
+
+size_t
+client_impl::messages_cache_size() {
+	size_t size = 0;
+
+	services_map_t::iterator it = services_.begin();
+	for (; it != services_.end(); ++it) {
+		if (it->second.get()) {
+			size += it->second->queue_storage_size();
+		}
+		else {
+			std::string error_str = "object for service wth name " + it->first;
+			error_str += " is emty at " + std::string(BOOST_CURRENT_FUNCTION);
+			throw error(error_str);
+		}
+	}
+
+	return size;
+}
+
+boost::shared_ptr<configuration>
+client_impl::config() {
+	boost::shared_ptr<configuration> conf = context()->config();
+	if (!conf.get()) {
+		throw error("configuration object is empty at: " + std::string(BOOST_CURRENT_FUNCTION));
+	}
+
+	return conf;
 }
 
 } // namespace lsd

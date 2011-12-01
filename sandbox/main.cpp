@@ -8,6 +8,7 @@
 #include <boost/function.hpp>
 
 #include "client.hpp"
+#include "cached_message.hpp"
 
 /*
 #include "progress_timer.hpp"
@@ -47,8 +48,12 @@ void callback(const lsd::service_info_t& s_info, const std::vector<lsd::host_inf
 void create_client(int add_messages_count) {
 	lsd::client c(config_path);
 	c.connect();
+
+	for (int i = 0; i < add_messages_count; ++i) {
+		std::string uuid = c.send_message("test", "karma-engine-testing", "event");
+	}
+
 	sleep(60);
-	add_messages_count++;
 	/*
 	lsd::context sctx(config_path);
 	lsd::http_heartbeats_collector collector(sctx.config(), sctx.zmq_context());
@@ -60,8 +65,6 @@ void create_client(int add_messages_count) {
 
 	//
 	/*
-	
-
 	lsd::server s(config_path);
 	s.connect();
 
@@ -80,7 +83,7 @@ void create_client(int add_messages_count) {
 }
 
 int
-main(int argc, char** argv) {	
+main(int argc, char** argv) {
 	try {
 		po::options_description desc("Allowed options");
 		desc.add_options()
@@ -116,13 +119,3 @@ main(int argc, char** argv) {
 	return EXIT_SUCCESS;
 }
 
-/*
- main.cpp multicast_client.cpp multicast_server.cpp \
-    helpers.cpp client.cpp heartbeat_notifier.cpp refresher.cpp \
-    multicast_heartbeats_collector.cpp http_heartbeats_collector.cpp \
-    server.cpp server_impl.cpp server_socket.cpp persistent_storage.cpp \
-    persistent_storage_callback.cpp server_context.cpp progress_timer.cpp \
-    json/json_reader.cpp json/json_value.cpp json/json_writer.cpp \
-    cached_message.cpp configuration.cpp client_context.cpp client_impl.cpp \
-    curl_hosts_fetcher.cpp
- */

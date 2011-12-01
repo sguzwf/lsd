@@ -10,28 +10,48 @@
 #include <boost/tokenizer.hpp>
 #include <boost/progress.hpp>
 
-#include "json/json.h"
-
-#include "persistent_storage.hpp"
-#include "persistent_storage_callback.hpp"
-#include "progress_timer.hpp"
-#include "helpers.hpp"
+#include "message_cache.hpp"
 
 namespace lsd {
 
-persistent_storage::persistent_storage(boost::shared_ptr<configuration> config, boost::shared_ptr<base_logger> logger) :
-	config_(config),
-	logger_(logger)
+message_cache::message_cache(boost::shared_ptr<lsd::context> context,
+							 enum message_cache_type type) :
+	context_(context),
+	type_(type)
 {
-	open_storage();
+	//open_eblob();
 }
 
-persistent_storage::~persistent_storage() {
-	close_eblob();
+message_cache::~message_cache() {
+	//close_eblob();
+}
+
+boost::shared_ptr<lsd::context>
+message_cache::context() {
+	return context_;
 }
 
 void
+message_cache::enqueue(boost::shared_ptr<cached_message> message) {
+	new_messages_.push_back(message);
+}
+
+/*
+void
 persistent_storage::open_storage() {
+
+}
+
+void
+persistent_storage::eblob_iterator_callback(const std::string& value) {
+	cached_message msg = cached_message::from_json_string(value);
+
+	// add data to online cache
+	add_message_to_online_cache(msg);
+}
+
+void
+persistent_storage::open_eblob() {
 	try {			
 		logger()->log("load existing eblob at path: %s", config()->eblob_path().c_str());
 		progress_timer t;
@@ -56,35 +76,22 @@ persistent_storage::open_storage() {
 
 	progress_timer t;		
 	logger()->log(PLOG_DEBUG, "reopen eblob for writing");
-	open_eblob();
-	logger()->log(PLOG_DEBUG, "loaded eblob in %0.4f seconds", t.elapsed());
-}
 
-void
-persistent_storage::eblob_iterator_callback(const std::string& value) {
-	cached_message msg = cached_message::from_json_string(value);
+	//zbr::eblob_logger l(, );
+	//zbr::eblob_config cfg;
+	//memset(&cfg, 0, sizeof(cfg));
+	//cfg.file = (char*)eblob_path_.c_str();
+	//cfg.log = l.log();
+	//cfg.sync = 1;
+	//cfg.iterate_threads = 16;
 
-	// add data to online cache
-	add_message_to_online_cache(msg);
-}
-
-void
-persistent_storage::open_eblob() {
-	/*
-	zbr::eblob_logger l(, );
-	zbr::eblob_config cfg;
-	memset(&cfg, 0, sizeof(cfg));
-	cfg.file = (char*)eblob_path_.c_str();
-	cfg.log = l.log();
-	cfg.sync = 1;
-	cfg.iterate_threads = 16;
-
-	eblob_.reset(new zbr::eblob(eblob_log_path_.c_str(), eblob_log_flags_, &cfg));
-	*/
+	//eblob_.reset(new zbr::eblob(eblob_log_path_.c_str(), eblob_log_flags_, &cfg));
 
 	eblob_.reset(new zbr::eblob(config()->eblob_log_path().c_str(),
 								config()->eblob_log_flags(),
 								config()->eblob_path()));
+
+	logger()->log(PLOG_DEBUG, "loaded eblob in %0.4f seconds", t.elapsed());
 }
 
 void
@@ -93,7 +100,7 @@ persistent_storage::close_eblob() {
 }
 
 void
-persistent_storage::write_to_eblob(const std::string& key, const std::string& value) {	
+persistent_storage::write_to_eblob(const std::string& key, const std::string& value) {
 	if (key.empty()) {
 		return;
 	}
@@ -323,5 +330,6 @@ boost::shared_ptr<configuration>
 persistent_storage::config() {
 	return config_;
 }
+*/
 
 } // namespace lsd

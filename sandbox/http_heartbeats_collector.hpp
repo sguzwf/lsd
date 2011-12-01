@@ -17,7 +17,6 @@
 #include "smart_logger.hpp"
 #include "heartbeats_collector.hpp"
 #include "curl_hosts_fetcher.hpp"
-#include "globals.hpp"
 #include "configuration.hpp"
 
 namespace lsd {
@@ -38,7 +37,7 @@ private:
 	void services_ping_callback();
 	void ping_service_hosts(const service_info_t& s_info, std::vector<host_info_t>& hosts);
 
-	void parse_host_response(const std::string& cocaine_app_name,
+	void parse_host_response(const service_info_t& s_info,
 							 const std::string& response,
 							 const std::string& host_ip,
 							 std::vector<handle_info_t>& handles);

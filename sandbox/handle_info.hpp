@@ -4,34 +4,36 @@
 #include <string>
 #include <map>
 
+#include "structs.hpp"
+
 namespace lsd {
+
+// predeclaration
+template <typename LSD_T> class handle_info;
+typedef handle_info<LT> handle_info_t;
 
 template <typename LSD_T>
 class handle_info {
 public:
 	handle_info() {};
 
-	handle_info(const std::string& name, std::string instance, typename LSD_T::port port) :
-	name_(name), instance_(instance), port_(port) {};
+	handle_info(const std::string& name, typename LSD_T::port port) :
+	name_(name), port_(port) {};
 
 	handle_info(const handle_info<LSD_T>& h_info) :
-	name_(h_info.name_), instance_(h_info.instance_), port_(h_info.port_) {};
+	name_(h_info.name_), port_(h_info.port_) {};
 
 	bool operator == (const handle_info<LSD_T>& sh) const {
-		return (name_ == sh.name_ &&
-				instance_ == sh.instance_ &&
-				port_ == sh.port_);
+		return (name_ == sh.name_ && port_ == sh.port_);
 	};
 
 	std::string name_;
-	std::string instance_;
 	typename LSD_T::port port_;
 };
 
 template <typename LSD_T>
 std::ostream& operator << (std::ostream& out, const handle_info<LSD_T>& handle) {
-	out << "name: " << handle.name_ << ", instance: " << handle.instance_;
-	out << ", port: " << handle.port_;
+	out << "name: " << handle.name_ << ", port: " << handle.port_;
 
 	return out;
 };

@@ -16,7 +16,13 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#include "structs.hpp"
+
 namespace lsd {
+
+// predeclaration
+template <typename LSD_T> class host_info;
+typedef host_info<LT> host_info_t;
 
 template<typename LSD_T>
 class host_info {
@@ -34,6 +40,10 @@ public:
 		hostname_ = hostname_for_ip(ip);
 	}
 	
+	host_info(const typename LSD_T::ip_addr ip, const std::string& hostname) :
+		ip_(ip), hostname_(hostname) {
+	}
+
 	host_info(const host_info<LSD_T>& info) : 
 	ip_(info.ip_), hostname_(info.hostname_) {
 	}

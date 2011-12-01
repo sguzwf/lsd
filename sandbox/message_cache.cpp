@@ -11,6 +11,7 @@
 #include <boost/progress.hpp>
 
 #include "message_cache.hpp"
+#include "error.hpp"
 
 namespace lsd {
 
@@ -19,11 +20,10 @@ message_cache::message_cache(boost::shared_ptr<lsd::context> context,
 	context_(context),
 	type_(type)
 {
-	//open_eblob();
+
 }
 
 message_cache::~message_cache() {
-	//close_eblob();
 }
 
 boost::shared_ptr<lsd::context>
@@ -36,300 +36,93 @@ message_cache::enqueue(boost::shared_ptr<cached_message> message) {
 	new_messages_.push_back(message);
 }
 
-/*
-void
-persistent_storage::open_storage() {
-
-}
-
-void
-persistent_storage::eblob_iterator_callback(const std::string& value) {
-	cached_message msg = cached_message::from_json_string(value);
-
-	// add data to online cache
-	add_message_to_online_cache(msg);
-}
-
-void
-persistent_storage::open_eblob() {
-	try {			
-		logger()->log("load existing eblob at path: %s", config()->eblob_path().c_str());
-		progress_timer t;
-		
-		// load messages from eblob to online cache
-		persistent_storage_callback cb(boost::bind(&persistent_storage::eblob_iterator_callback, this, _1));
-		zbr::eblob_iterator eblob_iter(config()->eblob_path(), true);
-		eblob_iter.iterate(cb, 1);
-		
-		int msg_count = messages_in_online_cache();
-		
-		if (msg_count > 0) {
-			logger()->log("loaded %d messages from eblob in %0.4f seconds", msg_count, t.elapsed());
-		}
-		else {
-			logger()->log("no messages in eblob");
-		}
-	}
-	catch (...) {
-		logger()->log("no messages in eblob");
-	}
-
-	progress_timer t;		
-	logger()->log(PLOG_DEBUG, "reopen eblob for writing");
-
-	//zbr::eblob_logger l(, );
-	//zbr::eblob_config cfg;
-	//memset(&cfg, 0, sizeof(cfg));
-	//cfg.file = (char*)eblob_path_.c_str();
-	//cfg.log = l.log();
-	//cfg.sync = 1;
-	//cfg.iterate_threads = 16;
-
-	//eblob_.reset(new zbr::eblob(eblob_log_path_.c_str(), eblob_log_flags_, &cfg));
-
-	eblob_.reset(new zbr::eblob(config()->eblob_log_path().c_str(),
-								config()->eblob_log_flags(),
-								config()->eblob_path()));
-
-	logger()->log(PLOG_DEBUG, "loaded eblob in %0.4f seconds", t.elapsed());
-}
-
-void
-persistent_storage::close_eblob() {
-	eblob_.reset(NULL);
-}
-
-void
-persistent_storage::write_to_eblob(const std::string& key, const std::string& value) {
-	if (key.empty()) {
-		return;
-	}
-
-	eblob_->write_hashed(key, value, BLOB_DISK_CTL_NOCSUM);
-}
-
-std::string
-persistent_storage::read_from_eblob(const std::string& key) {
-	if (key.empty()) {
-		return "";
-	}
-	
-	return eblob_->read_hashed(key, 0, 0);
-}
-
-void
-persistent_storage::erase_from_eblob(const std::string& key) {	
-	eblob_->remove_hashed(key);
+size_t
+message_cache::new_messages_count() const {
+	return new_messages_.size();
 }
 
 size_t
-persistent_storage::eblob_size() {
-	return static_cast<size_t>(eblob_->elements());
+message_cache::sent_messages_count() const {
+	return sent_messages_.size();
 }
 
-void
-persistent_storage::add_message(const std::string& msg, const std::string& service_prefix) {
-	cached_message cmesg(service_prefix, msg);
-	add_message(cmesg);
+boost::shared_ptr<cached_message>
+message_cache::get_new_message() const {
+	return new_messages_.front();
 }
 
-void
-persistent_storage::add_message(cached_message& msg) {
-	add_message_to_online_cache(msg);
+boost::shared_ptr<cached_message>
+message_cache::get_sent_message(const std::string& uuid) const {
+	messages_index_t::const_iterator it = sent_messages_.find(uuid);
 
-	// add message to offline cache
-	write_to_eblob(msg.uuid(), msg.json());
-}
-
-void
-persistent_storage::add_message_to_online_cache(const cached_message& msg) {	
-	// add message to online cache
-	message_map_iter it = cache_.find(msg.service_prefix());
-	
-	if (it == cache_.end()) {
-		std::deque<cached_message> queue;
-		queue.push_back(msg);
-		cache_[msg.service_prefix()] = queue;
+	if (it == sent_messages_.end()) {
+		std::string error_str = "can not find message with uuid " + uuid;
+		error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_str);
 	}
-	else {
-		it->second.push_back(msg);
+
+	if (!it->second.get()) {
+		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
+
+	return it->second;
 }
 
 void
-persistent_storage::remove_message(const cached_message& msg) {
-	remove_message(msg.service_prefix(), msg.uuid());
+message_cache::move_new_message_to_sent() {
+	boost::shared_ptr<cached_message> msg = new_messages_.front();
+
+	if (!msg.get()) {
+		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
+	}
+
+	sent_messages_[msg->uuid()] = msg;
+	new_messages_.pop_front();
 }
 
 void
-persistent_storage::remove_message(const std::string& service_prefix, const std::string& uuid) {
-	message_map_iter iter = cache_.find(service_prefix);
-	
-	// remove message from online cache.
-	// check for group queue existence and whether queue is not empty
-	if (iter != cache_.end() && !iter->second.empty()) {
-		for (std::deque<cached_message>::iterator it = iter->second.begin(); it != iter->second.end();) {
-			if (it->service_prefix() == service_prefix && it->uuid() == uuid) {
-				iter->second.erase(it);
-				break;
-			}
-			else {
-				++it;
-			}
+message_cache::move_sent_message_to_new(const std::string& uuid) {
+	messages_index_t::iterator it = sent_messages_.find(uuid);
+
+	if (it == sent_messages_.end()) {
+		std::string error_str = "can not find message with uuid " + uuid;
+		error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_str);
+	}
+
+	if (!it->second.get()) {
+		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
+	}
+
+	new_messages_.push_back(it->second);
+	sent_messages_.erase(it);
+}
+
+void
+message_cache::remove_message_from_cache(const std::string& uuid) {
+	messages_index_t::iterator it = sent_messages_.find(uuid);
+
+	if (it == sent_messages_.end()) {
+		std::string error_str = "can not find message with uuid " + uuid;
+		error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_str);
+	}
+
+	sent_messages_.erase(it);
+}
+
+void
+message_cache::make_all_messages_new() {
+	messages_index_t::iterator it = sent_messages_.begin();
+	for (; it != sent_messages_.end(); ++it) {
+		if (!it->second.get()) {
+			throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 		}
+
+		new_messages_.push_back(it->second);
 	}
 
-	// remove message from offline cache.
-	erase_from_eblob(uuid);
+	sent_messages_.clear();
 }
-
-bool
-persistent_storage::pending_message(cached_message& msg, const std::string& service_prefix) {
-	message_map_iter it = cache_.find(service_prefix);
-	
-	// check for group queue existence
-	if (it == cache_.end()) {
-		return false;
-	}
-
-	// check whether queue is empty
-	if (it->second.empty()) {
-		return false;
-	}
-
-	// get frontmost non-sent message
-	for (message_queue_iter qit = it->second.begin(); qit != it->second.end(); ++qit) {
-		if (!qit->is_sent()) {
-			msg = *qit;
-			return true;
-		}
-	}
-	
-	return false;
-}
-
-void
-persistent_storage::update_message(cached_message& msg) {
-	message_map_iter it = cache_.find(msg.service_prefix());
-	
-	// check for group queue existence
-	if (it == cache_.end()) {
-		return;
-	}
-
-	// check whether queue is empty
-	if (it->second.empty()) {
-		return;
-	}
-
-	// get frontmost non-sent message
-	for (message_queue_iter qit = it->second.begin(); qit != it->second.end(); ++qit) {
-		if (*qit == msg) {
-			qit->set_message(msg.message());
-			qit->set_sent(msg.is_sent());
-			qit->set_sent_timestamp(msg.sent_timestamp());
-			return;
-		}
-	}
-}
-
-bool
-persistent_storage::pending_message_queue(message_queue& queue, const std::string& service_prefix) {
-	message_map_iter it = cache_.find(service_prefix);
-
-	// check for group queue existence
-	if (it == cache_.end()) {
-		return false;
-	}
-
-	// check whether queue is empty
-	if (it->second.empty()) {
-		return false;
-	}
-	
-	queue.clear();
-	queue.insert(queue.begin(), it->second.begin(), it->second.end());
-	
-	return true;
-}
-
-void
-persistent_storage::pending_services(std::vector<std::string>& services) {
-	services.clear();
-	services.reserve(cache_.size());
-	
-	for (message_map_iter it = cache_.begin(); it != cache_.end(); ++it) {
-		services.push_back(it->first);
-	}
-}
-
-size_t
-persistent_storage::messages_in_online_cache() {
-	size_t count = 0;
-	
-	for (message_map_iter it = cache_.begin(); it != cache_.end(); ++it) {
-		count += it->second.size();
-	}
-	
-	return count;
-}
-
-size_t
-persistent_storage::messages_count_all() {
-	size_t retval = 0;
-	
-	for (message_map_iter it = cache_.begin(); it != cache_.end(); ++it) {
-		retval += it->second.size();
-	}
-	
-	return retval;
-}
-
-size_t
-persistent_storage::messages_count(const std::string& service_prefix) {
-	message_map_iter it = cache_.find(service_prefix);
-
-	// check for group queue existence
-	if (it == cache_.end()) {
-		return 0;
-	}
-
-	// check whether queue is empty
-	if (it->second.empty()) {
-		return 0;
-	}
-	
-	return it->second.size();
-}
-
-void
-persistent_storage::mark_messages_unsent(const std::string& service_prefix) {
-	message_map_iter it = cache_.find(service_prefix);
-
-	// check for group queue existence
-	if (it == cache_.end()) {
-		return;
-	}
-
-	// check whether queue is empty
-	if (it->second.empty()) {
-		return;
-	}
-	
-	for (message_queue_iter qit = it->second.begin(); qit != it->second.end(); ++qit) {
-		qit->set_sent(false);
-	}
-}
-
-boost::shared_ptr<base_logger>
-persistent_storage::logger() {
-	return logger_;
-}
-
-boost::shared_ptr<configuration>
-persistent_storage::config() {
-	return config_;
-}
-*/
 
 } // namespace lsd

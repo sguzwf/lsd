@@ -18,10 +18,11 @@ namespace lsd {
 
 class message_cache : private boost::noncopyable {
 public:
-	typedef boost::shared_ptr<cached_message> cached_massage_ptr_t;
-	typedef std::deque<cached_massage_ptr_t> message_queue_t;
+	typedef boost::shared_ptr<cached_message> cached_message_ptr_t;
+	typedef std::deque<cached_message_ptr_t> message_queue_t;
 
-	typedef std::map<std::string, cached_massage_ptr_t> messages_index_t;
+	// map <uuid, cached message>
+	typedef std::map<std::string, cached_message_ptr_t> messages_index_t;
 
 public:
 	explicit message_cache(boost::shared_ptr<lsd::context> context,
@@ -31,6 +32,15 @@ public:
 
 	void enqueue(boost::shared_ptr<cached_message> message);
 
+	size_t new_messages_count() const;
+	size_t sent_messages_count() const;
+	cached_message_ptr_t get_new_message() const;
+	cached_message_ptr_t get_sent_message(const std::string& uuid) const;
+	void move_new_message_to_sent();
+	void move_sent_message_to_new(const std::string& uuid);
+	void remove_message_from_cache(const std::string& uuid);
+	void make_all_messages_new();
+
 private:
 	boost::shared_ptr<lsd::context> context();
 
@@ -38,7 +48,7 @@ private:
 	boost::shared_ptr<lsd::context> context_;
 	enum message_cache_type type_;
 
-	message_queue_t sent_messages_;
+	messages_index_t sent_messages_;
 	message_queue_t new_messages_;
 };
 

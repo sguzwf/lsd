@@ -31,9 +31,10 @@ public:
 		   boost::shared_ptr<lsd::context> context,
 		   const hosts_info_list_t& hosts);
 
-	void kill();
+	void terminate_with_timeout(double timeout);
 
 	const handle_info<LSD_T>& info() const;
+	boost::shared_ptr<message_cache> messages_cache();
 
 	void reconnect(const hosts_info_list_t& hosts);
 	void connect(const hosts_info_list_t& hosts);
@@ -68,8 +69,13 @@ handle<LSD_T>::info() const {
 }
 
 template <typename LSD_T> void
-handle<LSD_T>::kill() {
+handle<LSD_T>::terminate_with_timeout(double timeout) {
+	timeout += 1.0f;
+}
 
+template <typename LSD_T> boost::shared_ptr<message_cache>
+handle<LSD_T>::messages_cache() {
+	return message_cache_;
 }
 
 template <typename LSD_T> void

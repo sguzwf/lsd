@@ -20,7 +20,7 @@ message_cache::message_cache(boost::shared_ptr<lsd::context> context,
 	context_(context),
 	type_(type)
 {
-
+	new_messages_.reset(new message_queue_t);
 }
 
 message_cache::~message_cache() {
@@ -31,14 +31,53 @@ message_cache::context() {
 	return context_;
 }
 
+boost::shared_ptr<std::deque<boost::shared_ptr<cached_message> > >
+message_cache::new_messages() {
+	if (!new_messages_.get()) {
+		std::string error_str = "new messages queue object is empty at ";
+		error_str += std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_str);
+	}
+
+	return new_messages_;
+}
+
+boost::shared_ptr<std::deque<boost::shared_ptr<cached_message> > >
+message_cache::new_messages() const {
+	if (!new_messages_.get()) {
+		std::string error_str = "new messages queue object is empty at ";
+		error_str += std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_str);
+	}
+
+	return new_messages_;
+}
+
 void
 message_cache::enqueue(boost::shared_ptr<cached_message> message) {
-	new_messages_.push_back(message);
+	new_messages()->push_back(message);
+}
+
+void
+message_cache::append_message_queue(message_queue_ptr_t queue) {
+	// validate new queue
+	if (!queue.get() || queue->empty()) {
+		return;
+	}
+
+	// replace existing queue
+	if (new_messages()->empty()) {
+		new_messages_.reset();
+		new_messages_ = queue;
+	}
+	else {
+		new_messages()->insert(new_messages_->end(), queue->begin(), queue->end());
+	}
 }
 
 size_t
 message_cache::new_messages_count() const {
-	return new_messages_.size();
+	return new_messages()->size();
 }
 
 size_t
@@ -48,7 +87,7 @@ message_cache::sent_messages_count() const {
 
 boost::shared_ptr<cached_message>
 message_cache::get_new_message() const {
-	return new_messages_.front();
+	return new_messages()->front();
 }
 
 boost::shared_ptr<cached_message>
@@ -70,14 +109,14 @@ message_cache::get_sent_message(const std::string& uuid) const {
 
 void
 message_cache::move_new_message_to_sent() {
-	boost::shared_ptr<cached_message> msg = new_messages_.front();
+	boost::shared_ptr<cached_message> msg = new_messages()->front();
 
 	if (!msg.get()) {
 		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
 	sent_messages_[msg->uuid()] = msg;
-	new_messages_.pop_front();
+	new_messages()->pop_front();
 }
 
 void
@@ -94,7 +133,7 @@ message_cache::move_sent_message_to_new(const std::string& uuid) {
 		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
-	new_messages_.push_back(it->second);
+	new_messages()->push_back(it->second);
 	sent_messages_.erase(it);
 }
 
@@ -119,7 +158,7 @@ message_cache::make_all_messages_new() {
 			throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
-		new_messages_.push_back(it->second);
+		new_messages()->push_back(it->second);
 	}
 
 	sent_messages_.clear();

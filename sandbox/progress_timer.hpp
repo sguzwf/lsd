@@ -18,12 +18,16 @@ public:
 	double elapsed();
 
 	static timeval get_precise_time();
-	static unsigned long long timeval_diff(timeval* end_time, timeval* start_time);
-	static unsigned long long timeval_diff(timeval* difference, timeval* end_time, timeval* start_time);
+	static unsigned long long timeval_diff(const timeval* end_time,
+										   const timeval* start_time);
 
-	static unsigned long long elapsed_microseconds_from_time(timeval* time);
-	static unsigned long long elapsed_milliseconds_from_time(timeval* time);
-	static double elapsed_from_time(timeval* time);
+	static unsigned long long timeval_diff(timeval* difference,
+										   const timeval* end_time,
+										   const timeval* start_time);
+
+	static unsigned long long elapsed_microseconds_from_time(const timeval* time);
+	static unsigned long long elapsed_milliseconds_from_time(const timeval* time);
+	static double elapsed_from_time(const timeval* time);
 
 private:
 	timeval begin_;

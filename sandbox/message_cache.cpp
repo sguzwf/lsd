@@ -12,6 +12,7 @@
 
 #include "message_cache.hpp"
 #include "error.hpp"
+#include "progress_timer.hpp"
 
 namespace lsd {
 
@@ -33,7 +34,7 @@ message_cache::context() {
 
 boost::shared_ptr<std::deque<boost::shared_ptr<cached_message> > >
 message_cache::new_messages() {
-	if (!new_messages_.get()) {
+	if (!new_messages_) {
 		std::string error_str = "new messages queue object is empty at ";
 		error_str += std::string(BOOST_CURRENT_FUNCTION);
 		throw error(error_str);
@@ -44,7 +45,7 @@ message_cache::new_messages() {
 
 boost::shared_ptr<std::deque<boost::shared_ptr<cached_message> > >
 message_cache::new_messages() const {
-	if (!new_messages_.get()) {
+	if (!new_messages_) {
 		std::string error_str = "new messages queue object is empty at ";
 		error_str += std::string(BOOST_CURRENT_FUNCTION);
 		throw error(error_str);
@@ -61,7 +62,7 @@ message_cache::enqueue(boost::shared_ptr<cached_message> message) {
 void
 message_cache::append_message_queue(message_queue_ptr_t queue) {
 	// validate new queue
-	if (!queue.get() || queue->empty()) {
+	if (!queue || queue->empty()) {
 		return;
 	}
 
@@ -100,7 +101,7 @@ message_cache::get_sent_message(const std::string& uuid) const {
 		throw error(error_str);
 	}
 
-	if (!it->second.get()) {
+	if (!it->second) {
 		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
@@ -111,7 +112,7 @@ void
 message_cache::move_new_message_to_sent() {
 	boost::shared_ptr<cached_message> msg = new_messages()->front();
 
-	if (!msg.get()) {
+	if (!msg) {
 		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
@@ -129,7 +130,7 @@ message_cache::move_sent_message_to_new(const std::string& uuid) {
 		throw error(error_str);
 	}
 
-	if (!it->second.get()) {
+	if (!it->second) {
 		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
@@ -154,7 +155,7 @@ void
 message_cache::make_all_messages_new() {
 	messages_index_t::iterator it = sent_messages_.begin();
 	for (; it != sent_messages_.end(); ++it) {
-		if (!it->second.get()) {
+		if (!it->second) {
 			throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
@@ -162,6 +163,43 @@ message_cache::make_all_messages_new() {
 	}
 
 	sent_messages_.clear();
+}
+
+void
+message_cache::process_timed_out_messages() {
+	messages_index_t::iterator it = sent_messages_.begin();
+	for (; it != sent_messages_.end();) {
+
+		// get single sent message
+		boost::shared_ptr<cached_message> msg = it->second;
+		if (!msg) {
+			throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
+		}
+
+		// check whether it timed out
+		bool is_timed_out = false;
+		const timeval& timestamp = msg->sent_timestamp();
+
+		if (timestamp.tv_sec != 0 &&
+			timestamp.tv_usec != 0 &&
+			msg->policy().deadline > 0.0)
+		{
+			if (progress_timer::elapsed_from_time(&timestamp) > msg->policy().deadline) {
+				is_timed_out = true;
+			}
+		}
+
+		if (is_timed_out) {
+			// move message to new
+			new_messages()->push_back(msg);
+
+			// remove from sent messages
+			sent_messages_.erase(it++);
+		}
+		else {
+			++it;
+		}
+	}
 }
 
 } // namespace lsd

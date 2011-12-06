@@ -43,6 +43,7 @@ public:
 	void move_sent_message_to_new(const std::string& uuid);
 	void remove_message_from_cache(const std::string& uuid);
 	void make_all_messages_new();
+	void process_timed_out_messages();
 
 private:
 	boost::shared_ptr<lsd::context> context();

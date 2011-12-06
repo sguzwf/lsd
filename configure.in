@@ -23,6 +23,7 @@ AC_CHECK_LIB([zmq], [exit])
 AC_CHECK_LIB([uuid], [exit])
 AC_CHECK_LIB([eblob_cpp], [exit])
 AC_CHECK_LIB([curl], [exit])
+AC_CHECK_LIB([msgpack], [exit])
 
 # process open ssl
 AX_CHECK_OPENSSL([], [AC_MSG_ERROR([openssl not found])])

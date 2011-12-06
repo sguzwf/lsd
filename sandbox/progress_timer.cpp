@@ -46,12 +46,16 @@ progress_timer::reset() {
 }
 
 unsigned long long
-progress_timer::timeval_diff(timeval* end_time, timeval* start_time) {
+progress_timer::timeval_diff(const timeval* end_time,
+							 const timeval* start_time)
+{
 	return timeval_diff(NULL, end_time, start_time);
 }
 
 unsigned long long
-progress_timer::timeval_diff(timeval* difference, timeval* end_time, timeval* start_time) {
+progress_timer::timeval_diff(timeval* difference,
+							 const timeval* end_time,
+							 const timeval* start_time) {
 	timeval temp_diff;
 
 	if (difference == NULL) {
@@ -72,19 +76,19 @@ progress_timer::timeval_diff(timeval* difference, timeval* end_time, timeval* st
 }
 
 unsigned long long
-progress_timer::elapsed_microseconds_from_time(timeval* time) {
+progress_timer::elapsed_microseconds_from_time(const timeval* time) {
 	timeval end_time = get_precise_time();
 	return timeval_diff(&end_time, time);
 }
 
 unsigned long long
-progress_timer::elapsed_milliseconds_from_time(timeval* time) {
+progress_timer::elapsed_milliseconds_from_time(const timeval* time) {
 	timeval end_time = get_precise_time();
 	return timeval_diff(&end_time, time) / 1000;
 }
 
 double
-progress_timer::elapsed_from_time(timeval* time) {
+progress_timer::elapsed_from_time(const timeval* time) {
 	timeval end_time = get_precise_time();
 	return timeval_diff(&end_time, time) / 1000000.0;
 }

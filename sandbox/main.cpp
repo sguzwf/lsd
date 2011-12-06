@@ -2,84 +2,43 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <map>
+
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/function.hpp>
 
+#include <msgpack.hpp>
+
 #include "client.hpp"
 #include "cached_message.hpp"
-
-/*
 #include "progress_timer.hpp"
-#include "smart_logger.hpp"
-#include "curl_hosts_fetcher.hpp"
-#include "globals.hpp"
-#include "http_heartbeats_collector.hpp"
-#include "configuration.hpp"
-#include "context.hpp"
-*/
 
 namespace po = boost::program_options;
 
 std::string config_path = "/home/rimz/lsd/sandbox/config.json";
 
-/*
-void callback(const lsd::service_info_t& s_info, const std::vector<lsd::host_info_t>& hosts, const std::vector<lsd::handle_info_t>& handles) {
-	std::cout << "--- service ---\n";
-	std::cout << "name: " << s_info.name_ << "\n";
-	std::cout << "description: " << s_info.description_ << "\n";
-	std::cout << "application name: " << s_info.app_name_ << "\n";
-	std::cout << "hosts url: " << s_info.hosts_url_ << "\n";
-	std::cout << "control port: " << s_info.control_port_ << "\n";
-
-	std::cout << "hosts:\n";
-	for (size_t i = 0; i < hosts.size(); ++i) {
-		std::cout << "\t" << i + 1 << ") " << hosts[i] << "\n";		
-	}
-
-	std::cout << "handles:\n";
-	for (size_t i = 0; i < handles.size(); ++i) {
-		std::cout << "\t" << i + 1 << ") " << handles[i] << "\n";	
-	}
-}
-*/
-
 void create_client(int add_messages_count) {
+	lsd::progress_timer timer;
+
 	lsd::client c(config_path);
 	c.connect();
 
+	std::map<std::string, int> event;
+	event["service"] = 1;
+	event["uid"] = 12345;
+	event["score"] = 500;
+
+	msgpack::sbuffer buffer;
+	msgpack::pack(buffer, event);
+
 	for (int i = 0; i < add_messages_count; ++i) {
-		std::string uuid = c.send_message("test", "karma-engine-testing", "event");
+		std::string uuid1 = c.send_message(buffer.data(), buffer.size(), "karma-engine-testing", "event");
 	}
 
-	sleep(60);
-	/*
-	lsd::context sctx(config_path);
-	lsd::http_heartbeats_collector collector(sctx.config(), sctx.zmq_context());
-	collector.set_callback(&callback);
-	collector.set_logger(sctx.logger());
-	collector.run();
-	sleep(10);
-	*/
-
-	//
-	/*
-	lsd::server s(config_path);
-	s.connect();
-
-	if (add_messages_count > 0) {
-		lsd::progress_timer t;
-		for (int i = 0; i < add_messages_count; ++i) {		
-			std::string message = "[ \"message " + boost::lexical_cast<std::string>(i) + "\" ]";
-			s.send_message(message, "zbr");
-		}
-
-		lsd::smart_logger<>::log_common("added %d messages in %.4f seconds", add_messages_count, t.elapsed());
-	}
-
-	sleep(120);
-	*/
+	sleep(20);
 }
 
 int

@@ -150,34 +150,34 @@ cached_message::json() {
 	resulting_json += "{\n";
 
 	if (policy_.urgent) {
-		resulting_json += "urgent : true,\n";
+		resulting_json += "\"urgent\" : true,\n";
 	}
 	else {
-		resulting_json += "urgent : false,\n";
+		resulting_json += "\"urgent\" : false,\n";
 	}
 
 	if (policy_.mailboxed) {
-		resulting_json += "mailboxed : true,\n";
+		resulting_json += "\"mailboxed\" : true,\n";
 	}
 	else {
-		resulting_json += "mailboxed : false,\n";
+		resulting_json += "\"mailboxed\" : false,\n";
 	}
 
 	if (policy_.timeout) {
-		resulting_json += "timeout : 0.0,\n";
+		resulting_json += "\"timeout\" : 0.0,\n";
 	}
 	else {
-		resulting_json += "timeout : 0.0,\n";
+		resulting_json += "\"timeout\" : 0.0,\n";
 	}
 
 	if (policy_.deadline) {
-		resulting_json += "deadline : 0.0,\n";
+		resulting_json += "\"deadline\" : 0.0,\n";
 	}
 	else {
-		resulting_json += "deadline : 0.0,\n";
+		resulting_json += "\"deadline\" : 0.0,\n";
 	}
 
-	resulting_json += "uuid : \"" + uuid_ + "\"\n}";
+	resulting_json += "\"uuid\" : \"" + uuid_ + "\"\n}";
 
 	return resulting_json;
 }

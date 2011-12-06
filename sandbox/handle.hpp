@@ -136,11 +136,10 @@ handle<LSD_T>::dispatch_messages() {
 	socket_ptr_t control_socket;
 
 	establish_control_conection(control_socket);
+	log_dispatch_start();
 
 	// process messages
 	while (is_running_) {
-		log_dispatch_start();
-
 		// receive control message
 		int control_message = receive_control_messages(control_socket);
 
@@ -160,6 +159,9 @@ handle<LSD_T>::dispatch_messages() {
 		if (is_connected_ && is_running_) {
 			dispatch_next_available_message(main_socket);
 		}
+
+		// check for timed out messages
+		messages_cache()->process_timed_out_messages();
 
 		// check for message responces
 		//bool received_response = false;
@@ -197,7 +199,7 @@ handle<LSD_T>::receive_control_messages(socket_ptr_t& control_socket) {
 	poll_items[0].events = ZMQ_POLLIN;
 	poll_items[0].revents = 0;
 
-	int socket_response = zmq_poll(poll_items, 1, DEFAULT_SOCKET_POLL_TIMEOUT);
+	int socket_response = zmq_poll(poll_items, 1, 0);
 
 	if (socket_response <= 0) {
 		return 0;
@@ -337,8 +339,13 @@ handle<LSD_T>::dispatch_next_available_message(socket_ptr_t main_socket) {
 			throw error(error_msg);
 		}
 
+		// send message
 		try {
-			logger()->log(PLOG_DEBUG, "sending message...");
+			//logger()->log(PLOG_DEBUG, "sending message...");
+
+			// send beginning of multipart
+			zmq::message_t empty_message(0);
+			main_socket->send(empty_message, ZMQ_SNDMORE);
 
 			// send header
 			std::string msg_header = new_msg->json();
@@ -356,7 +363,7 @@ handle<LSD_T>::dispatch_next_available_message(socket_ptr_t main_socket) {
 			}
 
 			main_socket->send(message);
-			logger()->log(PLOG_DEBUG, "message sent.");
+			//logger()->log(PLOG_DEBUG, "message sent.");
 		}
 		catch (const std::exception& ex) {
 			std::string error_msg = "service: " + info_.service_name_;

@@ -60,7 +60,7 @@ client_impl::connect() {
 	else if (conf->autodiscovery_type() == AT_HTTP) {
 		heartbeats_collector_.reset(new http_heartbeats_collector(conf, context()->zmq_context()));
 		heartbeats_collector_->set_callback(boost::bind(&client_impl::service_hosts_pinged_callback, this, _1, _2, _3));
-		heartbeats_collector_->set_logger(logger());
+		//heartbeats_collector_->set_logger(logger());
 		heartbeats_collector_->run();
 	}
 }

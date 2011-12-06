@@ -117,6 +117,7 @@ template <typename LSD_T> void
 service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 		const handles_info_list_t& handles)
 {
+	/*
 	logger()->log(PLOG_DEBUG, "service %s refreshed with:", info_.name_.c_str());
 
 	for (size_t i = 0; i < hosts.size(); ++i) {
@@ -130,12 +131,12 @@ service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 		tmp << "handle - " << handles[i];
 		logger()->log(PLOG_DEBUG, tmp.str());
 	}
+	*/
 
 	// refresh hosts
 	hosts_info_list_t outstanding_hosts;
 	hosts_info_list_t new_hosts;
 	refresh_hosts(hosts, outstanding_hosts, new_hosts);
-
 
 	// refresh handles
 	handles_info_list_t outstanding_handles;
@@ -163,7 +164,7 @@ service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 		if (!new_hosts.empty()) {
 			typename handles_map_t::iterator it = handles_.begin();
 			for (;it != handles_.end(); ++it) {
-				it->second->connect(new_hosts);
+				it->second->connect_new_hosts(new_hosts);
 			}
 		}
 	}
@@ -258,7 +259,7 @@ service<LSD_T>::remove_outstanding_handles(const handles_info_list_t& handles) {
 			}
 
 			// immediately terminate all handle activity
-			handle->terminate_with_timeout(0.0f);
+			handle->disconnect();
 			boost::shared_ptr<message_cache> msg_cache = handle->messages_cache();
 
 			// check handle message cache
@@ -321,7 +322,9 @@ service<LSD_T>::create_new_handles(const handles_info_list_t& handles, const hos
 	// create handles
 	for (size_t i = 0; i < handles.size(); ++i) {
 		handle_ptr_t handle_ptr;
-		handle_ptr.reset(new handle<LSD_T>(handles[i], context_, hosts));
+		handle_info<LSD_T> handle_info = handles[i];
+		handle_info.service_name_ = info_.name_;
+		handle_ptr.reset(new handle<LSD_T>(handle_info, context_, hosts));
 
 		// find corresponding unhandled msgs queue
 		unhandled_messages_map_t::iterator it = unhandled_messages_.find(handles[i].name_);
@@ -344,10 +347,10 @@ service<LSD_T>::create_new_handles(const handles_info_list_t& handles, const hos
 					throw error(error_str);
 				}
 			}
-		}
 
-		// remove message queue from unhandled messages map
-		unhandled_messages_.erase(it);
+			// remove message queue from unhandled messages map
+			unhandled_messages_.erase(it);
+		}
 
 		// add handle to storage and connect it
 		handles_[handles[i].name_] = handle_ptr;

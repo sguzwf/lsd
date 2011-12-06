@@ -386,7 +386,7 @@ http_heartbeats_collector::parse_host_response(const service_info_t& s_info,
 				}
 			}
 
-			handle_info_t s_handle(handle_name, port);
+			handle_info_t s_handle(handle_name, s_info.name_, port);
 
 			bool handle_ok = true;
 

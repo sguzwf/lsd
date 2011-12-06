@@ -31,10 +31,17 @@ public:
 	const message_path& path() const;
 	const message_policy& policy() const;
 	const std::string& uuid() const;
+
 	bool is_sent() const;
+	void set_sent(bool value);
+
 	const timeval& sent_timestamp() const;
+	void set_sent_timestamp(const timeval& val);
+
+	void mark_as_unsent();
 
 	size_t data_size();
+	std::string json();
 
 	static const size_t MAX_MESSAGE_DATA_SIZE = 2147483648; // 2gb
 	static const size_t UUID_SIZE = 36; // bytes

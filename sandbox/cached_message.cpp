@@ -127,4 +127,59 @@ cached_message::data_size() {
 	return data_size_;
 }
 
+void
+cached_message::set_sent(bool value) {
+	is_sent_ = value;
+}
+
+void
+cached_message::set_sent_timestamp(const timeval& val) {
+	sent_timestamp_ = val;
+}
+
+void
+cached_message::mark_as_unsent() {
+	is_sent_ = false;
+	sent_timestamp_.tv_sec = 0;
+	sent_timestamp_.tv_usec = 0;
+}
+
+std::string
+cached_message::json() {
+	std::string resulting_json;
+	resulting_json += "{\n";
+
+	if (policy_.urgent) {
+		resulting_json += "urgent : true,\n";
+	}
+	else {
+		resulting_json += "urgent : false,\n";
+	}
+
+	if (policy_.mailboxed) {
+		resulting_json += "mailboxed : true,\n";
+	}
+	else {
+		resulting_json += "mailboxed : false,\n";
+	}
+
+	if (policy_.timeout) {
+		resulting_json += "timeout : 0.0,\n";
+	}
+	else {
+		resulting_json += "timeout : 0.0,\n";
+	}
+
+	if (policy_.deadline) {
+		resulting_json += "deadline : 0.0,\n";
+	}
+	else {
+		resulting_json += "deadline : 0.0,\n";
+	}
+
+	resulting_json += "uuid : \"" + uuid_ + "\"\n}";
+
+	return resulting_json;
+}
+
 } // namespace lsd

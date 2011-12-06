@@ -38,7 +38,7 @@ void create_client(int add_messages_count) {
 		std::string uuid1 = c.send_message(buffer.data(), buffer.size(), "karma-engine-testing", "event");
 	}
 
-	sleep(20);
+	sleep(600);
 }
 
 int

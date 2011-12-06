@@ -13,6 +13,10 @@
 #include <boost/date_time.hpp>
 #include <boost/shared_ptr.hpp>
 
+#include "json/json.h"
+
+#include <msgpack.hpp>
+
 #include "handle_info.hpp"
 #include "host_info.hpp"
 #include "structs.hpp"
@@ -63,12 +67,15 @@ private:
 	void dispatch_messages();
 	void log_dispatch_start();
 
+	// working with control messages
 	void establish_control_conection(socket_ptr_t& control_socket);
 	int receive_control_messages(socket_ptr_t& control_socket);
 	void dispatch_control_messages(int type, socket_ptr_t& main_socket);
+
+	// working with messages
 	void dispatch_next_available_message(socket_ptr_t main_socket);
 	bool check_for_responses(socket_ptr_t& main_socket);
-
+	void dispatch_responces(socket_ptr_t& main_socket);
 	void connect_zmq_socket_to_hosts(socket_ptr_t& socket,
 									 hosts_info_list_t& hosts);
 
@@ -161,7 +168,10 @@ handle<LSD_T>::dispatch_messages() {
 		}
 
 		// check for timed out messages
-		messages_cache()->process_timed_out_messages();
+		{
+			boost::mutex::scoped_lock lock(mutex_);
+			messages_cache()->process_timed_out_messages();
+		}
 
 		// check for message responces
 		//bool received_response = false;
@@ -169,6 +179,10 @@ handle<LSD_T>::dispatch_messages() {
 		//	received_response = check_for_responses(main_socket);
 		//}
 
+		// process received responce(s)
+		//if (is_connected_ && is_running_ && received_response) {
+		//	dispatch_responces(main_socket);
+		//}
 	}
 
 	control_socket.reset();
@@ -216,9 +230,10 @@ handle<LSD_T>::receive_control_messages(socket_ptr_t& control_socket) {
     		memcpy((void *)&received_message, reply.data(), reply.size());
     		return received_message;
     	}
-    	catch (...) {
-    			std::string error_msg = "some very ugly shit happend at ";
+    	catch (const std::exception& ex) {
+    			std::string error_msg = "some very ugly shit happend while recv on socket at ";
     			error_msg += std::string(BOOST_CURRENT_FUNCTION);
+    			error_msg += " details: " + std::string(ex.what());
     			throw error(error_msg);
     	}
     }
@@ -363,7 +378,7 @@ handle<LSD_T>::dispatch_next_available_message(socket_ptr_t main_socket) {
 			}
 
 			main_socket->send(message);
-			//logger()->log(PLOG_DEBUG, "message sent.");
+			//logger()->log(PLOG_DEBUG, "sent.");
 		}
 		catch (const std::exception& ex) {
 			std::string error_msg = "service: " + info_.service_name_;
@@ -388,7 +403,14 @@ handle<LSD_T>::check_for_responses(socket_ptr_t& main_socket) {
 		return 0;
 	}
 
-	/*
+	// validate socket
+	if (!main_socket.get()) {
+		std::string error_msg = "service: " + info_.service_name_;
+		error_msg += ", handle: " + info_.name_ + " — empty socket object";
+		error_msg += " at " + std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_msg);
+	}
+
 	// poll for responce
 	zmq_pollitem_t poll_items[1];
 	poll_items[0].socket = *main_socket;
@@ -396,18 +418,113 @@ handle<LSD_T>::check_for_responses(socket_ptr_t& main_socket) {
 	poll_items[0].events = ZMQ_POLLIN;
 	poll_items[0].revents = 0;
 
-
-	int socket_response = zmq_poll(poll_items, 1, DEFAULT_SOCKET_POLL_TIMEOUT);
+	int socket_response = zmq_poll(poll_items, 1, 0);
 
 	if (socket_response <= 0) {
+		//logger()->log(PLOG_DEBUG, "no response.");
 		return false;
 	}
-	*/
-	//std::string error_msg = "some very ugly shit happend at ";
-	//error_msg += std::string(BOOST_CURRENT_FUNCTION);
-	//throw error(error_msg);
+
+	// in case we received message response
+	if ((ZMQ_POLLIN & poll_items[0].revents) == ZMQ_POLLIN) {
+		//logger()->log(PLOG_DEBUG, "response!");
+		return true;
+	}
 
     return false;
+}
+
+template <typename LSD_T> void
+handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
+	static int responces_count = 0;
+
+	//logger()->log(PLOG_DEBUG, "receiving response.");
+
+	zmq::message_t reply;
+
+	while (true) {
+		bool receiving_failed = false;
+
+		// receive reply
+		try {
+			if (!main_socket->recv(&reply, ZMQ_NOBLOCK)) {
+				break;
+			}
+
+			// receive json envelope
+			main_socket->recv(&reply);
+			std::string json_header((const char*)reply.data(), reply.size());
+			//logger()->log(PLOG_DEBUG, "received header: %s", json_header.c_str());
+
+			// parse json
+			bool is_response_completed = false;
+			int is_error = 0;
+			std::string uuid;
+
+			Json::Value header_val;
+			Json::Reader jreader;
+			if (jreader.parse(json_header.c_str(), header_val)) {
+				is_response_completed = header_val.get("completed", false).asBool();
+				is_error = header_val.get("code", 0).asInt();
+				uuid = header_val.get("uuid", "").asString();
+			}
+			else {
+				std::string error_msg = "service: " + info_.service_name_;
+				error_msg += ", handle: " + info_.name_ + " — could not parse response json header";
+				error_msg += " at " + std::string(BOOST_CURRENT_FUNCTION) + "reason: ";
+				throw error(error_msg);
+			}
+
+			if (!is_response_completed && is_error == 0) {
+				//logger()->log(PLOG_DEBUG, "responce not completed");
+				// receive chunk data
+				main_socket->recv(&reply);
+				msgpack::unpacked msg;
+				msgpack::unpack(&msg, (const char*)reply.data(), reply.size());
+
+				//msgpack::object obj = msg.get();
+				//std::stringstream stream;
+				//stream << obj;
+				//logger()->log(PLOG_DEBUG, "received data: %s", stream.str().c_str());
+			}
+
+			/*
+			if (is_error != 0) {
+				messages_cache()->move_sent_message_to_new(uuid);
+			}
+			else {
+				if (is_response_completed) {
+					//logger()->log(PLOG_DEBUG, "responce completed");
+					messages_cache()->remove_message_from_cache(uuid);
+					++responces_count;
+
+					if (responces_count % 100 == 0) {
+						logger()->log(PLOG_DEBUG, "processed %d messages", responces_count);
+					}
+
+					if (messages_cache()->new_messages_count() % 100 == 0) {
+						logger()->log(PLOG_DEBUG, "new messages count %d", messages_cache()->new_messages_count());
+					}
+
+					if (messages_cache()->sent_messages_count() % 100 == 0) {
+						logger()->log(PLOG_DEBUG, "send messages count %d", messages_cache()->sent_messages_count());
+					}
+				}
+			}
+			*/
+
+
+		}
+		catch (...) {
+			receiving_failed = true;
+		}
+
+		if (!receiving_failed) {
+
+		}
+	}
+
+	//logger()->log(PLOG_DEBUG, "receiving message DONE.");
 }
 
 template <typename LSD_T> void

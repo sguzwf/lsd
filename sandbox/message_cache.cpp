@@ -134,6 +134,8 @@ message_cache::move_sent_message_to_new(const std::string& uuid) {
 		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
+	it->second->mark_as_unsent();
+
 	new_messages()->push_back(it->second);
 	sent_messages_.erase(it);
 }
@@ -191,6 +193,7 @@ message_cache::process_timed_out_messages() {
 
 		if (is_timed_out) {
 			// move message to new
+			msg->mark_as_unsent();
 			new_messages()->push_back(msg);
 
 			// remove from sent messages

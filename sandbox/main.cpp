@@ -2,9 +2,6 @@
 
 #include <iostream>
 #include <stdexcept>
-#include <string>
-#include <map>
-
 #include <boost/program_options.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/shared_ptr.hpp>
@@ -13,19 +10,25 @@
 #include <msgpack.hpp>
 
 #include "client.hpp"
-#include "cached_message.hpp"
-#include "progress_timer.hpp"
 
 namespace po = boost::program_options;
 
 std::string config_path = "/home/rimz/lsd/sandbox/config.json";
 
 void create_client(int add_messages_count) {
-	lsd::progress_timer timer;
-
 	lsd::client c(config_path);
 	c.connect();
 
+	// create message path
+	lsd::message_path path;
+	path.service_name = "karma-engine-testing";
+	path.handle_name = "event";
+
+	// create message policy
+	lsd::message_policy policy;
+	policy.deadline = 2.0;
+
+	// create message data
 	std::map<std::string, int> event;
 	event["service"] = 1;
 	event["uid"] = 12345;
@@ -34,11 +37,12 @@ void create_client(int add_messages_count) {
 	msgpack::sbuffer buffer;
 	msgpack::pack(buffer, event);
 
+	// send messages
 	for (int i = 0; i < add_messages_count; ++i) {
-		std::string uuid1 = c.send_message(buffer.data(), buffer.size(), "karma-engine-testing", "event");
+		std::string uuid1 = c.send_message(buffer.data(), buffer.size(), path, policy);
 	}
 
-	sleep(600);
+	sleep(30);
 }
 
 int

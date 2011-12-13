@@ -1,13 +1,14 @@
 #include "settings.h"
 
 #include "context.hpp"
+#include "error.hpp"
 
 namespace lsd {
 
 context::context(const std::string& config_path) {
 	// load configuration from file
 	if (config_path.empty()) {
-		throw std::runtime_error("config file path is empty string at: " + std::string(BOOST_CURRENT_FUNCTION));
+		throw error("config file path is empty string at: " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
 	config_.reset(new configuration(config_path));
@@ -50,6 +51,7 @@ context::config() {
 
 boost::shared_ptr<base_logger>
 context::logger() {
+	boost::mutex::scoped_lock lock(mutex_);
 	return logger_;
 }
 

@@ -5,14 +5,13 @@
 #include <string>
 #include <map>
 
-#include <boost/thread/thread.hpp>
+#include <boost/thread/mutex.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/date_time.hpp>
 #include <boost/bind.hpp>
 
 #include <zmq.hpp>
 
-#include "multicast_server.hpp"
 #include "refresher.hpp"
 #include "smart_logger.hpp"
 #include "heartbeats_collector.hpp"
@@ -23,7 +22,9 @@ namespace lsd {
 	
 class http_heartbeats_collector : public heartbeats_collector, private boost::noncopyable {
 public:
-	http_heartbeats_collector(boost::shared_ptr<configuration> config, boost::shared_ptr<zmq::context_t> zmq_context);
+	http_heartbeats_collector(boost::shared_ptr<configuration> config,
+							  boost::shared_ptr<zmq::context_t> zmq_context);
+
 	virtual ~http_heartbeats_collector();
 
 	void run();
@@ -38,13 +39,20 @@ private:
 	void ping_service_hosts(const service_info_t& s_info, std::vector<host_info_t>& hosts);
 
 	void parse_host_response(const service_info_t& s_info,
+							 LT::ip_addr ip,
 							 const std::string& response,
-							 const std::string& host_ip,
 							 std::vector<handle_info_t>& handles);
 
 	void validate_host_handles(const service_info_t& s_info,
 							   const std::vector<host_info_t>& hosts,
 							   const std::multimap<LT::ip_addr, handle_info_t>& hosts_and_handles) const;
+
+	bool get_metainfo_from_host(const service_info_t& s_info,
+								LT::ip_addr ip,
+								std::string& response);
+
+	static const int curl_fetcher_timeout = 1;
+	static const int hosts_ping_timeout = 1;
 
 private:
 	boost::shared_ptr<configuration> config_;
@@ -58,6 +66,7 @@ private:
 	std::auto_ptr<refresher> refresher_;
 
 	heartbeats_collector::callback_t callback_;
+	boost::mutex mutex_;
 };
 
 } // namespace lsd

@@ -11,15 +11,18 @@
 
 #include <boost/shared_ptr.hpp>
 #include <boost/utility.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/function.hpp>
 
-#include "service_info.hpp"
-#include "host_info.hpp"
-#include "handle_info.hpp"
-#include "handle.hpp"
-#include "smart_logger.hpp"
 #include "structs.hpp"
 #include "context.hpp"
 #include "cached_message.hpp"
+#include "cached_response.hpp"
+#include "service_info.hpp"
+#include "host_info.hpp"
+#include "handle.hpp"
+#include "handle_info.hpp"
+#include "smart_logger.hpp"
 #include "error.hpp"
 
 namespace lsd {
@@ -40,9 +43,19 @@ public:
 	typedef std::map<std::string, handle_ptr_t> handles_map_t;
 
 	typedef boost::shared_ptr<cached_message> cached_message_prt_t;
+	typedef boost::shared_ptr<cached_response> cached_response_prt_t;
+
 	typedef std::deque<cached_message_prt_t> cached_messages_deque_t;
+	typedef std::deque<cached_response_prt_t> cached_responces_deque_t;
+
 	typedef boost::shared_ptr<cached_messages_deque_t> messages_deque_ptr_t;
+	typedef boost::shared_ptr<cached_responces_deque_t> responces_deque_ptr_t;
+
+	// map <handle_name/handle's unprocessed messages deque>
 	typedef std::map<std::string, messages_deque_ptr_t> unhandled_messages_map_t;
+
+	// map <handle_name/handle's responces deque>
+	typedef std::map<std::string, responces_deque_ptr_t> responces_map_t;
 
 public:
 	service(const service_info<LSD_T>& info, boost::shared_ptr<lsd::context> context);
@@ -51,7 +64,7 @@ public:
 								   const std::vector<handle_info<LSD_T> >& handles);
 
 	void send_message(cached_message_prt_t message);
-	size_t queue_storage_size();
+	size_t cache_size() const;
 
 public:
 	template<typename T> friend std::ostream& operator << (std::ostream& out, const service<T>& s);
@@ -68,24 +81,46 @@ private:
 	void remove_outstanding_handles(const handles_info_list_t& handles);
 	void create_new_handles(const handles_info_list_t& handles, const hosts_info_list_t& hosts);
 
+	void log_refreshed_hosts_and_handles(const hosts_info_list_t& hosts,
+										 const handles_info_list_t& handles);
+
+	void responce_callback(cached_response_prt_t response);
+
 	boost::shared_ptr<base_logger> logger();
 	boost::shared_ptr<configuration> config();
 	boost::shared_ptr<lsd::context> context();
 
 private:
+	// service information
 	service_info<LSD_T> info_;
-	hosts_map_t hosts_;		// hosts (ip, hostname)
-	handles_map_t handles_;	// collected from hosts data (handle name, port)
-	boost::shared_ptr<lsd::context> context_;
-	size_t queue_storage_size_;
+
+	// hosts map (ip, hostname)
+	hosts_map_t hosts_;
+
+	// handles map (handle name, handle ptr)
+	handles_map_t handles_;
+
+	// service messages for non-existing handles <handle name, handle ptr>
 	unhandled_messages_map_t unhandled_messages_;
+
+	// responces map <handle name, responces queue ptr>
+	responces_map_t received_responces_;
+
+	// lsd context
+	boost::shared_ptr<lsd::context> context_;
+
+	// total cache size
+	size_t cache_size_;
+
+	// synchronization
+	boost::mutex mutex_;
 };
 
 template <typename LSD_T>
 service<LSD_T>::service(const service_info<LSD_T>& info, boost::shared_ptr<lsd::context> context) :
 	info_(info),
 	context_(context),
-	queue_storage_size_(0)
+	cache_size_(0)
 {
 }
 
@@ -114,10 +149,9 @@ service<LSD_T>::config() {
 }
 
 template <typename LSD_T> void
-service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
-		const handles_info_list_t& handles)
+service<LSD_T>::log_refreshed_hosts_and_handles(const hosts_info_list_t& hosts,
+												const handles_info_list_t& handles)
 {
-	/*
 	logger()->log(PLOG_DEBUG, "service %s refreshed with:", info_.name_.c_str());
 
 	for (size_t i = 0; i < hosts.size(); ++i) {
@@ -131,7 +165,55 @@ service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 		tmp << "handle - " << handles[i];
 		logger()->log(PLOG_DEBUG, tmp.str());
 	}
-	*/
+}
+
+template <typename LSD_T> void
+service<LSD_T>::responce_callback(cached_response_prt_t response) {
+
+	// validate response
+	if (!response) {
+		std::string error_str = "received empty response object!";
+		error_str += " service: " + info_.name_;
+		error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_str);
+	}
+
+
+	boost::mutex::scoped_lock lock(mutex_);
+	const message_path& path = response->path();
+	responces_map_t::iterator it = received_responces_.find(path.handle_name);
+
+	responces_deque_ptr_t handle_resp_queue;
+
+	// if no queue for handle's responces exists, create one
+	if (it == received_responces_.end()) {
+		handle_resp_queue.reset(new cached_responces_deque_t);
+		received_responces_.insert(std::make_pair(path.handle_name, handle_resp_queue));
+	}
+	else {
+		handle_resp_queue = it->second;
+
+		// validate existing responces queue
+		if (!handle_resp_queue) {
+			std::string error_str = "found empty response queue object!";
+			error_str += " service: " + info_.name_ + " handle: " + path.handle_name;
+			error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
+			throw error(error_str);
+		}
+	}
+
+	// add responce to queue
+	handle_resp_queue->push_back(response);
+}
+
+template <typename LSD_T> void
+service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
+										  const handles_info_list_t& handles)
+{
+	boost::mutex::scoped_lock lock(mutex_);
+
+	//log_refreshed_hosts_and_handles(hosts, handles);
+	//return;
 
 	// refresh hosts
 	hosts_info_list_t outstanding_hosts;
@@ -168,6 +250,8 @@ service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 			}
 		}
 	}
+
+	lock.unlock();
 
 	// create new handles if any
 	create_new_handles(new_handles, hosts_v);
@@ -251,7 +335,7 @@ service<LSD_T>::remove_outstanding_handles(const handles_info_list_t& handles) {
 			handle_ptr_t handle = it->second;
 
 			// check handle
-			if (!handle.get()) {
+			if (!handle) {
 				std::string error_str = "service handle object is empty. service: " + info_.name_;
 				error_str += ", handle: " + handles[i].name_;
 				error_str += ". at " + std::string(BOOST_CURRENT_FUNCTION);
@@ -263,7 +347,7 @@ service<LSD_T>::remove_outstanding_handles(const handles_info_list_t& handles) {
 			boost::shared_ptr<message_cache> msg_cache = handle->messages_cache();
 
 			// check handle message cache
-			if (!msg_cache.get()) {
+			if (!msg_cache) {
 				std::string error_str = "handle message cache object is empty. service: " + info_.name_;
 				error_str += ", handle: " + handles[i].name_;
 				error_str += ". at " + std::string(BOOST_CURRENT_FUNCTION);
@@ -280,9 +364,9 @@ service<LSD_T>::remove_outstanding_handles(const handles_info_list_t& handles) {
 			if (it != unhandled_messages_.end()) {
 				messages_deque_ptr_t msg_queue = it->second;
 
-				if (msg_queue.get() && !msg_queue->empty()) {
+				if (msg_queue && !msg_queue->empty()) {
 					std::string error_str = "found unhandled non-empty message queue with existing handle!";
-					error_str += " service: " + info_.name_; ", handle: " + handles[i].name_;
+					error_str += " service: " + info_.name_ + ", handle: " + handles[i].name_;
 					error_str += ". at " + std::string(BOOST_CURRENT_FUNCTION);
 					throw error(error_str);
 				}
@@ -292,12 +376,14 @@ service<LSD_T>::remove_outstanding_handles(const handles_info_list_t& handles) {
 			}
 
 			// move handle messages to unhandled messages map in service
-			messages_deque_ptr_t handle_msg_queue = msg_cache->new_messages();
+			messages_deque_ptr_t handle_msg_queue;
+			handle_msg_queue.reset(new cached_messages_deque_t);
+			*handle_msg_queue = msg_cache->new_messages();
 
 			// validate handle queue
-			if (!handle_msg_queue.get()) {
+			if (!handle_msg_queue) {
 				std::string error_str = "found empty handle message queue when handle exists!";
-				error_str += " service: " + info_.name_; ", handle: " + handles[i].name_;
+				error_str += " service: " + info_.name_ + ", handle: " + handles[i].name_;
 				error_str += ". at " + std::string(BOOST_CURRENT_FUNCTION);
 				throw error(error_str);
 			}
@@ -319,12 +405,19 @@ service<LSD_T>::create_new_handles(const handles_info_list_t& handles, const hos
 		return;
 	}
 
+	boost::mutex::scoped_lock lock(mutex_);
+
 	// create handles
 	for (size_t i = 0; i < handles.size(); ++i) {
 		handle_ptr_t handle_ptr;
 		handle_info<LSD_T> handle_info = handles[i];
 		handle_info.service_name_ = info_.name_;
 		handle_ptr.reset(new handle<LSD_T>(handle_info, context_, hosts));
+
+		// set responce callback
+		typedef typename handle<LSD_T>::responce_callback_t resp_callback;
+		resp_callback callback = boost::bind(&service<LSD_T>::responce_callback, this, _1);
+		handle_ptr->set_responce_callback(callback);
 
 		// find corresponding unhandled msgs queue
 		unhandled_messages_map_t::iterator it = unhandled_messages_.find(handles[i].name_);
@@ -338,11 +431,12 @@ service<LSD_T>::create_new_handles(const handles_info_list_t& handles, const hos
 
 				// validate handle's message cache object
 				if (handle_ptr->messages_cache().get()) {
+					logger()->log(PLOG_DEBUG, "appending existing mesage queue for handle %s, queue size: %d", handles[i].name_.c_str(), msg_queue->size());
 					handle_ptr->messages_cache()->append_message_queue(msg_queue);
 				}
 				else {
 					std::string error_str = "found empty handle message queue when handle exists!";
-					error_str += " service: " + info_.name_; ", handle: " + handles[i].name_;
+					error_str += " service: " + info_.name_ + ", handle: " + handles[i].name_;
 					error_str += ". at " + std::string(BOOST_CURRENT_FUNCTION);
 					throw error(error_str);
 				}
@@ -354,13 +448,18 @@ service<LSD_T>::create_new_handles(const handles_info_list_t& handles, const hos
 
 		// add handle to storage and connect it
 		handles_[handles[i].name_] = handle_ptr;
+
+		lock.unlock();
 		handles_[handles[i].name_]->connect(hosts);
+		lock.lock();
 	}
 }
 
 template <typename LSD_T> void
 service<LSD_T>::send_message(cached_message_prt_t message) {
-	if (!message.get()) {
+	boost::mutex::scoped_lock lock(mutex_);
+
+	if (!message) {
 		std::string error_str = "message object is empty. service: " + info_.name_;
 		error_str += ". at " + std::string(BOOST_CURRENT_FUNCTION);
 		throw error(error_str);
@@ -374,9 +473,9 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 		handle_ptr_t handle_ptr = it->second;
 
 		// make sure we have valid handle
-		if (handle_ptr.get()) {
+		if (handle_ptr) {
 			handle_ptr->enqueue_message(message);
-			queue_storage_size_ += message->data_size();
+			cache_size_ += message->container_size();
 		}
 		else {
 			std::string error_str = "handle object " + handle_name;
@@ -400,9 +499,9 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 			messages_deque_ptr_t queue_ptr = it->second;
 
 			// validate msg queue
-			if (!queue_ptr.get()) {
-				std::string error_str = "found empty message queue in unhandled messages map!";
-				error_str += " service: " + info_.name_; ", handle: " + handle_name;
+			if (!queue_ptr) {
+				std::string error_str = "found empty message queue object in unhandled messages map!";
+				error_str += " service: " + info_.name_ + ", handle: " + handle_name;
 				error_str += ". at " + std::string(BOOST_CURRENT_FUNCTION);
 				throw error(error_str);
 			}
@@ -410,13 +509,13 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 			queue_ptr->push_back(message);
 		}
 
-		queue_storage_size_ += message->data_size();
+		cache_size_ += message->container_size();
 	}
 }
 
 template <typename LSD_T> size_t
-service<LSD_T>::queue_storage_size() {
-	return queue_storage_size_;
+service<LSD_T>::cache_size() const {
+	return cache_size_;
 }
 
 template<typename T>

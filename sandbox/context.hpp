@@ -8,6 +8,7 @@
 
 #include <boost/shared_ptr.hpp>
 #include <boost/utility.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include "smart_logger.hpp"
 #include "configuration.hpp"
@@ -27,6 +28,9 @@ private:
 	boost::shared_ptr<zmq::context_t> zmq_context_;
 	boost::shared_ptr<base_logger> logger_;
 	boost::shared_ptr<configuration> config_;
+
+	// synchronization
+	boost::mutex mutex_;
 };
 
 } // namespace lsd

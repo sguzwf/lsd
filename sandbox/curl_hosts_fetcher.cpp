@@ -10,7 +10,9 @@
 
 namespace lsd {
 
-curl_hosts_fetcher::curl_hosts_fetcher(const std::string& url, boost::uint32_t interval, service_info_t service_info) :
+curl_hosts_fetcher::curl_hosts_fetcher(const std::string& url,
+									   boost::uint32_t interval,
+									   service_info_t service_info) :
 	curl_(NULL),
 	url_(url),
 	interval_(interval),

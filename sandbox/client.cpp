@@ -88,7 +88,7 @@ client::get_impl() {
 		return impl_;
 	}
 	else {
-		throw std::runtime_error("client_impl object is empty at: " + std::string(BOOST_CURRENT_FUNCTION));
+		throw error("client_impl object is empty at: " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 }
 

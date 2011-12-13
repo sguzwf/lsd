@@ -35,15 +35,6 @@
 				"instance" : "default",
 				"hosts_url" : "http://deltax.dev.yandex.net",
 				"control_port" : 5000
-			},
-			
-			{
-            	"name" : "karma-engine-production",
-				"description" : "karma producion service",
-				"app_name" : "karma-engine2",
-				"instance" : "default",
-				"hosts_url" : "http://delta2x.dev.yandex.net",
-				"control_port" : 5010
 			}
 		]
 	}

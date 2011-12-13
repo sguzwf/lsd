@@ -10,7 +10,7 @@
 #include <boost/function.hpp>
 #include <boost/date_time.hpp>
 #include <boost/shared_ptr.hpp>
-#include <boost/thread/thread.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include "context.hpp"
 #include "service.hpp"
@@ -54,19 +54,22 @@ public:
 							 const message_policy& policy);
 
 	void set_response_callback(boost::function<void(const std::string&, void* data, size_t size)> callback);
-	size_t messages_cache_size();
+	size_t messages_cache_size() const;
 
 	boost::shared_ptr<base_logger> logger();
 	boost::shared_ptr<configuration> config();
 	boost::shared_ptr<lsd::context> context();
 
 private:
+	void update_messages_cache_size();
 	void service_hosts_pinged_callback(const service_info_t& s_info, const std::vector<host_info_t>& hosts, const std::vector<handle_info_t>& handles);
 
 private:
 	typedef std::map<std::string, boost::shared_ptr<service_t> > services_map_t;
 
 private:
+	size_t messages_cache_size_;
+
 	// main lsd context
 	boost::shared_ptr<lsd::context> context_;
 
@@ -78,6 +81,9 @@ private:
 
 	// message response callback
 	boost::function<void(const std::string&, void* data, size_t size)> response_callback_;
+
+	// synchronization
+	boost::mutex mutex_;
 };
 
 } // namespace lsd

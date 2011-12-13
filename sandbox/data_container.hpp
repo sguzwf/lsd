@@ -7,6 +7,7 @@
 
 #include <boost/shared_ptr.hpp>
 #include <boost/detail/atomic_count.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include "structs.hpp"
 
@@ -30,9 +31,14 @@ public:
 	void clear();
 
 private:
-	static const size_t SHA1_SIZE = 20; // size in bytes
-	static const size_t SHA1_CHUNK_SIZE = 512 * 1024; // 512 kb
-	static const size_t SMALL_DATA_SIZE = 1024 * 1024; // 1 mb
+	// sha1 size in bytes
+	static const size_t SHA1_SIZE = 20;
+
+	// sha1-encoded data chunk size - 512 kb
+	static const size_t SHA1_CHUNK_SIZE = 512 * 1024;
+
+	// max amount of data that does not need sha1 signature 1 mb
+	static const size_t SMALL_DATA_SIZE = 1024 * 1024;
 
 	typedef boost::detail::atomic_count reference_counter;
 	
@@ -52,6 +58,9 @@ private:
 
 	// data reference counter
 	boost::shared_ptr<reference_counter> ref_counter_;
+
+	// synchronization
+	boost::mutex mutex_;
 };
 
 } // namespace lsd

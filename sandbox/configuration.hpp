@@ -5,6 +5,8 @@
 #include <map>
 #include <iostream>
 
+#include <boost/thread/mutex.hpp>
+
 #include "structs.hpp"
 #include "service_info.hpp"
 #include "smart_logger.hpp"
@@ -84,6 +86,9 @@ private:
 	
 	// services
 	services_list_t services_list_;
+
+	// synchronization
+	boost::mutex mutex_;
 };
 
 } // namespace lsd

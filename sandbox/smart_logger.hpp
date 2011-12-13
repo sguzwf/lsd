@@ -5,7 +5,6 @@
 
 #include <fstream>
 #include <iostream>
-#include <stdexcept>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -14,6 +13,8 @@
 #include <time.h>
 
 #include <boost/current_function.hpp>
+
+#include "error.hpp"
 
 namespace lsd {
 
@@ -152,12 +153,12 @@ public:
 		}
 		catch (...) {
 			file_.close();
-			throw std::runtime_error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
+			throw error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
 		if (!file_.is_open()) {
 			file_.close();
-			throw std::runtime_error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
+			throw error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
 		file_ << first_message_;
@@ -178,7 +179,7 @@ public:
 
 		if (!file_.is_open()) {
 			file_.close();
-			throw std::runtime_error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
+			throw error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
 		file_ << get_message_prefix(type) << message << "\n" << std::flush;

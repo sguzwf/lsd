@@ -11,7 +11,9 @@
 
 namespace lsd {
 
-client_impl::client_impl(const std::string& config_path) {
+client_impl::client_impl(const std::string& config_path) :
+	messages_cache_size_(0)
+{
 	// create lsd context
 	std::string ctx_error_msg = "could not create lsd context at: " + std::string(BOOST_CURRENT_FUNCTION) + " ";
 
@@ -19,7 +21,7 @@ client_impl::client_impl(const std::string& config_path) {
 		context_.reset(new lsd::context(config_path));
 	}
 	catch (const std::exception& ex) {
-		throw std::runtime_error(ctx_error_msg + ex.what());
+		throw error(ctx_error_msg + ex.what());
 	}
 
 	// create services
@@ -34,24 +36,26 @@ client_impl::client_impl(const std::string& config_path) {
 }
 
 client_impl::~client_impl() {
-	heartbeats_collector_.reset(NULL);
+	disconnect();
+	logger()->log("client destroyed.");
 }
 
 void
 client_impl::connect() {
+	boost::mutex::scoped_lock lock(mutex_);
 	boost::shared_ptr<configuration> conf;
 
-	if (!context_.get()) {
+	if (!context_) {
 		std::string error_msg = "lsd context is NULL at: " + std::string(BOOST_CURRENT_FUNCTION);
-		throw std::runtime_error(error_msg);
+		throw error(error_msg);
 	}
 	else {
 		conf = context_->config();
 	}
 
-	if (!conf.get()) {
+	if (!conf) {
 		std::string error_msg = "configuration object is empty at: " + std::string(BOOST_CURRENT_FUNCTION);
-		throw std::runtime_error(error_msg);
+		throw error(error_msg);
 	}
 
 	if (conf->autodiscovery_type() == AT_MULTICAST) {
@@ -67,7 +71,21 @@ client_impl::connect() {
 
 void
 client_impl::disconnect() {
+	boost::mutex::scoped_lock lock(mutex_);
 
+	// stop collecting heartbeats
+	if (heartbeats_collector_.get()) {
+		heartbeats_collector_->stop();
+	}
+	else {
+
+	}
+
+	// stop services
+	services_map_t::iterator it = services_.begin();
+	for (; it != services_.end(); ++it) {
+		//if(it->second)
+	}
 }
 
 void
@@ -86,13 +104,13 @@ client_impl::service_hosts_pinged_callback(const service_info_t& s_info,
 		else {
 			std::string error_msg = "empty service object with lsd name " + s_info.name_;
 			error_msg += " was found in services. at: " + std::string(BOOST_CURRENT_FUNCTION);
-			throw std::runtime_error(error_msg);
+			throw error(error_msg);
 		}
 	}
 	else {
 		std::string error_msg = "lsd service with name " + s_info.name_;
 		error_msg += " was not found in services. at: " + std::string(BOOST_CURRENT_FUNCTION);
-		throw std::runtime_error(error_msg);
+		throw error(error_msg);
 	}
 }
 
@@ -122,8 +140,10 @@ client_impl::send_message(const void* data,
 						  const message_path& path,
 						  const message_policy& policy)
 {
+	boost::mutex::scoped_lock lock(mutex_);
+
 	// make sure we are not overcapacitated
-	size_t message_size = size + sizeof(cached_message) + cached_message::UUID_SIZE + path.data_size();
+	size_t message_size = size + sizeof(cached_message) + cached_message::UUID_SIZE + path.container_size();
 	size_t new_resulting_size = messages_cache_size() + message_size;
 
 	if (new_resulting_size > config()->max_message_cache_size()) {
@@ -146,8 +166,8 @@ client_impl::send_message(const void* data,
 		msg.reset(new cached_message(path, policy, data, size));
 		uuid = msg->uuid();
 
-		// send message
-		if (it->second.get()) {
+		// send message to handle
+		if (it->second) {
 			it->second->send_message(msg);
 		}
 		else {
@@ -161,6 +181,8 @@ client_impl::send_message(const void* data,
 		error_str += " found at " + std::string(BOOST_CURRENT_FUNCTION);
 		throw error(error_str);
 	}
+
+	update_messages_cache_size();
 
 	// return message uuid
 	return uuid;
@@ -213,22 +235,27 @@ client_impl::logger() {
 }
 
 size_t
-client_impl::messages_cache_size() {
-	size_t size = 0;
+client_impl::messages_cache_size() const {
+	return messages_cache_size_;
+}
+
+void
+client_impl::update_messages_cache_size() {
+	messages_cache_size_ = 0;
 
 	services_map_t::iterator it = services_.begin();
 	for (; it != services_.end(); ++it) {
-		if (it->second.get()) {
-			size += it->second->queue_storage_size();
+
+		boost::shared_ptr<service_t> service_ptr = it->second;
+		if (service_ptr) {
+			messages_cache_size_ += service_ptr->cache_size();
 		}
 		else {
 			std::string error_str = "object for service wth name " + it->first;
-			error_str += " is emty at " + std::string(BOOST_CURRENT_FUNCTION);
+			error_str += " is empty at " + std::string(BOOST_CURRENT_FUNCTION);
 			throw error(error_str);
 		}
 	}
-
-	return size;
 }
 
 boost::shared_ptr<configuration>

@@ -5,6 +5,7 @@
 #include <sys/time.h>
 
 #include <boost/shared_ptr.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include "structs.hpp"
 #include "data_container.hpp"
@@ -22,12 +23,10 @@ public:
 				   size_t data_size_);
 
 	virtual ~cached_message();
-	
-	cached_message& operator = (const cached_message& rhs);
-	bool operator == (const cached_message& rhs) const;
-	bool operator != (const cached_message& rhs) const;
 
 	const data_container& data() const;
+	size_t container_size() const;
+
 	const message_path& path() const;
 	const message_policy& policy() const;
 	const std::string& uuid() const;
@@ -40,8 +39,11 @@ public:
 
 	void mark_as_unsent();
 
-	size_t data_size();
 	std::string json();
+
+	cached_message& operator = (const cached_message& rhs);
+	bool operator == (const cached_message& rhs) const;
+	bool operator != (const cached_message& rhs) const;
 
 	static const size_t MAX_MESSAGE_DATA_SIZE = 2147483648; // 2gb
 	static const size_t UUID_SIZE = 36; // bytes
@@ -57,7 +59,10 @@ private:
 	std::string uuid_;
 	bool is_sent_;
 	timeval sent_timestamp_;
-	size_t data_size_;
+	size_t container_size_;
+
+	// synchronization
+	boost::mutex mutex_;
 };
 
 } // namespace lsd

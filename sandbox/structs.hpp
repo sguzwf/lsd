@@ -12,7 +12,7 @@ static const int PROTOCOL_VERSION = 1;
 static const unsigned long long MESSAGE_TIMEOUT = 10;	// seconds
 static const unsigned long long HEARTBEAT_INTERVAL = 1;	// seconds
 static const unsigned long long DEFAULT_SOCKET_POLL_TIMEOUT = 2000; // milliseconds
-static const unsigned long long DEFAULT_SOCKET_PING_TIMEOUT = 500; // milliseconds
+static const unsigned long long DEFAULT_SOCKET_PING_TIMEOUT = 1000; // milliseconds
 
 static const std::string DEFAULT_EBLOB_PATH = "/tmp/pmq_eblob";
 static const std::string DEFAULT_EBLOB_LOG_PATH = "/var/log/pmq_eblob.log";
@@ -72,7 +72,7 @@ struct message_path {
 		return !(*this == mp);
 	}
 
-	size_t data_size() const {
+	size_t container_size() const {
 		return (service_name.length() + handle_name.length());
 	}
 

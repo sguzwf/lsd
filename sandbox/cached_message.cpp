@@ -30,7 +30,8 @@ cached_message::cached_message(const message_path& path,
 							   size_t data_size) :
 	path_(path),
 	policy_(policy),
-	is_sent_(false)
+	is_sent_(false),
+	container_size_(0)
 {
 	if (data_size > MAX_MESSAGE_DATA_SIZE) {
 		throw error(LSD_MESSAGE_DATA_TOO_BIG_ERROR, "can't create message, message data too big.");
@@ -50,12 +51,7 @@ cached_message::init() {
 	gen_uuid();
 
 	// calc data size
-	data_size_ = sizeof(cached_message) + data_.size() + UUID_SIZE + path_.data_size();
-}
-
-const data_container&
-cached_message::data() const {
-	return data_;
+	container_size_ = sizeof(cached_message) + data_.size() + UUID_SIZE + path_.container_size();
 }
 
 void
@@ -70,8 +66,15 @@ cached_message::gen_uuid() {
 	uuid_ = buff;
 }
 
+const data_container&
+cached_message::data() const {
+	return data_;
+}
+
 cached_message&
 cached_message::operator = (const cached_message& rhs) {
+	boost::mutex::scoped_lock lock(mutex_);
+
 	if (this == &rhs) {
 		return *this;
 	}
@@ -82,7 +85,7 @@ cached_message::operator = (const cached_message& rhs) {
 	uuid_			= rhs.uuid_;
 	is_sent_		= rhs.is_sent_;
 	sent_timestamp_	= rhs.sent_timestamp_;
-	data_size_		= rhs.data_size_;
+	container_size_	= rhs.container_size_;
 
 	return *this;
 }
@@ -123,22 +126,25 @@ cached_message::policy() const {
 }
 
 size_t
-cached_message::data_size() {
-	return data_size_;
+cached_message::container_size() const {
+	return container_size_;
 }
 
 void
 cached_message::set_sent(bool value) {
+	boost::mutex::scoped_lock lock(mutex_);
 	is_sent_ = value;
 }
 
 void
 cached_message::set_sent_timestamp(const timeval& val) {
+	boost::mutex::scoped_lock lock(mutex_);
 	sent_timestamp_ = val;
 }
 
 void
 cached_message::mark_as_unsent() {
+	boost::mutex::scoped_lock lock(mutex_);
 	is_sent_ = false;
 	sent_timestamp_.tv_sec = 0;
 	sent_timestamp_.tv_usec = 0;

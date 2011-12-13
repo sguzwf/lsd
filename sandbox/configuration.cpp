@@ -57,12 +57,14 @@ configuration::~configuration() {
 
 void
 configuration::load(const std::string& path) {
+	boost::mutex::scoped_lock lock(mutex_);
+
 	path_ = path;
 
 	std::ifstream file(path.c_str(), std::ifstream::in);
 	
 	if (!file.is_open()) {
-		throw std::runtime_error("config file: " + path + " failed to open at: " + std::string(BOOST_CURRENT_FUNCTION));
+		throw error("config file: " + path + " failed to open at: " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
 	std::string config_data;
@@ -78,7 +80,7 @@ configuration::load(const std::string& path) {
 	bool parsing_successful = reader.parse(config_data, root);
 		
 	if (!parsing_successful) {
-		throw std::runtime_error("config file: " + path + " could not be parsed at: " + std::string(BOOST_CURRENT_FUNCTION));
+		throw error("config file: " + path + " could not be parsed at: " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 	
 	const Json::Value config_value = root["lsd_config"];
@@ -102,7 +104,7 @@ configuration::load(const std::string& path) {
 			std::string error_str = "unknown message cache type: " + message_cache_type_str;
 			error_str += "message_cache_type property can only take RAM_ONLY or PERSISTANT as value. ";
 			error_str += "at " + std::string(BOOST_CURRENT_FUNCTION);
-			throw std::runtime_error(error_str);
+			throw error(error_str);
 		}
 
 		std::string log_type = config_value.get("log_type", "STDOUT_LOGGER").asString();
@@ -191,30 +193,30 @@ configuration::load(const std::string& path) {
 			
 			// check values for validity
 			if (si.name_.empty()) {
-				throw std::runtime_error("service with no name was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+				throw error("service with no name was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 
 			if (si.app_name_.empty()) {
-				throw std::runtime_error("service with no application name was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+				throw error("service with no application name was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 			
 			if (si.instance_.empty()) {
-				throw std::runtime_error("service with no instance was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+				throw error("service with no instance was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 
 			if (si.hosts_url_.empty()) {
-				throw std::runtime_error("service with no hosts_url was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+				throw error("service with no hosts_url was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 			
 			if (si.control_port_ == 0) {
-				throw std::runtime_error("service with no control port == 0 was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+				throw error("service with no control port == 0 was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 			
 			// check for duplicate services
 			std::map<std::string, service_info_t>::iterator it = services_list_.begin();
 			for (;it != services_list_.end(); ++it) {
 				if (it->second.name_ == si.name_) {
-					throw std::runtime_error("duplicate service with name " + si.name_ + " was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+					throw error("duplicate service with name " + si.name_ + " was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 				}
 			}
 
@@ -224,7 +226,7 @@ configuration::load(const std::string& path) {
 				if (it->second == si) {
 					std::string error_msg = "duplicate service with app name " + si.app_name_ + " and ";
 					error_msg += "control port " + boost::lexical_cast<std::string>(si.control_port_) + " was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION);
-					throw std::runtime_error(error_msg);
+					throw error(error_msg);
 				}
 			}
 
@@ -235,7 +237,7 @@ configuration::load(const std::string& path) {
 		std::string error_msg = "config file: " + path + " could not be parsed. details: ";
 		error_msg += ex.what();
 		error_msg += " at: " + std::string(BOOST_CURRENT_FUNCTION);
-		throw std::runtime_error(error_msg);
+		throw error(error_msg);
 	}
 }
 

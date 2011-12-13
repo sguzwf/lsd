@@ -4,6 +4,7 @@
 namespace lsd {
 
 class client_impl;
+template<typename LSD_T> class service;
 
 } // namespace lsd
 

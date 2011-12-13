@@ -20,14 +20,14 @@ public:
 	handle_info(const std::string& name,
 				const std::string& service_name,
 				typename LSD_T::port port) :
-				name_(name),
-				service_name_(service_name),
-				port_(port) {};
+		name_(name),
+		service_name_(service_name),
+		port_(port) {};
 
 	handle_info(const handle_info<LSD_T>& h_info) :
-	name_(h_info.name_),
-	service_name_(h_info.service_name_),
-	port_(h_info.port_) {};
+		name_(h_info.name_),
+		service_name_(h_info.service_name_),
+		port_(h_info.port_) {};
 
 	bool operator == (const handle_info<LSD_T>& sh) const {
 		return (name_ == sh.name_ &&

@@ -1,7 +1,6 @@
 #include "settings.h"
 
 #include <cstring>
-#include <stdexcept>
 
 #include <boost/lexical_cast.hpp>
 #include <boost/current_function.hpp>
@@ -14,7 +13,7 @@
 
 #include "json/json.h"
 #include "structs.hpp"
-
+#include "error.hpp"
 #include "data_container.hpp"
 
 namespace lsd {
@@ -71,11 +70,11 @@ data_container::init_with_data(unsigned char* data, size_t size) {
 		data_ = new unsigned char[size];
 	}
 	catch (...) {
-		throw std::runtime_error(error_msg);
+		throw error(error_msg);
 	}
 
 	if (!data_) {
-		throw std::runtime_error(error_msg);
+		throw error(error_msg);
 	}
 
 	// copy data
@@ -106,11 +105,11 @@ data_container::init() {
 		ref_counter_.reset(new reference_counter(0));
 	}
 	catch (...) {
-		throw std::runtime_error(error_msg);
+		throw error(error_msg);
 	}
 
 	if (!ref_counter_.get()) {
-		throw std::runtime_error(error_msg);
+		throw error(error_msg);
 	}
 
 	// init data
@@ -132,6 +131,8 @@ data_container::~data_container() {
 
 data_container&
 data_container::operator = (const data_container& rhs) {
+	boost::mutex::scoped_lock lock(mutex_);
+
 	data_container(rhs).swap(*this);
 	return *this;
 }
@@ -169,6 +170,8 @@ data_container::empty() const {
 
 void
 data_container::clear() {
+	boost::mutex::scoped_lock lock(mutex_);
+
 	if (*ref_counter_ == 0) {
 		return;
 	}

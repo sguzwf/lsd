@@ -16,6 +16,7 @@ namespace po = boost::program_options;
 std::string config_path = "/home/rimz/lsd/sandbox/config.json";
 
 void create_client(int add_messages_count) {
+	std::cout << sizeof(float) << std::endl;
 	lsd::client c(config_path);
 	c.connect();
 

@@ -40,6 +40,7 @@ public:
 	void mark_as_unsent();
 
 	std::string json();
+	bool is_expired();
 
 	cached_message& operator = (const cached_message& rhs);
 	bool operator == (const cached_message& rhs) const;
@@ -53,13 +54,17 @@ private:
 	void init();
 	
 private:
+	// message data
 	data_container data_;
 	message_path path_;
 	message_policy policy_;
 	std::string uuid_;
+
+	// metadata
 	bool is_sent_;
 	timeval sent_timestamp_;
 	size_t container_size_;
+	int timeout_retries_count_;
 
 	// synchronization
 	boost::mutex mutex_;

@@ -12,6 +12,7 @@
 
 #include "cached_message.hpp"
 #include "error.hpp"
+#include "progress_timer.hpp"
 
 namespace lsd {
 cached_message::cached_message() :
@@ -148,6 +149,20 @@ cached_message::mark_as_unsent() {
 	is_sent_ = false;
 	sent_timestamp_.tv_sec = 0;
 	sent_timestamp_.tv_usec = 0;
+}
+
+bool
+cached_message::is_expired() {
+	if (policy_.deadline == 0.0f) {
+		return false;
+	}
+
+	timeval tv = progress_timer::get_precise_time();
+
+	double current_time = tv.tv_sec;
+	current_time += tv.tv_usec / 1000000.0f;
+
+	return (current_time > policy_.deadline);
 }
 
 std::string

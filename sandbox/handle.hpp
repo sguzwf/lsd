@@ -173,7 +173,7 @@ handle<LSD_T>::dispatch_messages() {
 			gettimeofday(&tv, NULL);
 
 			while (true) {
-				if (progress_timer::elapsed_from_time(&tv) > 1.0) {
+				if (progress_timer::elapsed_from_time(&tv) > 1.000) {
 					break;
 				}
 			}
@@ -199,6 +199,7 @@ handle<LSD_T>::dispatch_messages() {
 			}
 		}
 
+		/*
 		// check for message responces
 		bool received_response = false;
 		if (is_connected_ && is_running_) {
@@ -209,6 +210,7 @@ handle<LSD_T>::dispatch_messages() {
 		if (is_connected_ && is_running_ && received_response) {
 			dispatch_responces(main_socket);
 		}
+		*/
 	}
 
 	control_socket.reset();

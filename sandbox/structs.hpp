@@ -86,25 +86,25 @@ struct message_policy {
 		urgent(false),
 		mailboxed(false),
 		timeout(0.0f),
-		deadline(0.0f) {};
+		deadline(0.0f),
+		max_timeout_retries(0) {};
 
 	message_policy(bool send_to_all_hosts_,
 				   bool urgent_,
 				   float mailboxed_,
 				   float timeout_,
-				   float deadline_) :
+				   float deadline_,
+				   int max_timeout_retries_) :
 		send_to_all_hosts(send_to_all_hosts_),
 		urgent(urgent_),
 		mailboxed(mailboxed_),
 		timeout(timeout_),
-		deadline(deadline_) {};
+		deadline(deadline_),
+		max_timeout_retries(max_timeout_retries_) {};
 
-	message_policy(const message_policy& mp) :
-		send_to_all_hosts(mp.send_to_all_hosts),
-		urgent(mp.urgent),
-		mailboxed(mp.mailboxed),
-		timeout(mp.timeout),
-		deadline(mp.deadline) {};
+	message_policy(const message_policy& mp) {
+		*this = mp;
+	}
 
 	message_policy& operator = (const message_policy& rhs) {
 		if (this == &rhs) {
@@ -116,27 +116,29 @@ struct message_policy {
 		mailboxed = rhs.mailboxed;
 		timeout = rhs.timeout;
 		deadline = rhs.deadline;
+		max_timeout_retries = rhs.max_timeout_retries;
 
 		return *this;
 	}
 
-	bool operator == (const message_policy& mp) const {
-		return (send_to_all_hosts == mp.send_to_all_hosts &&
-				urgent == mp.urgent &&
-				mailboxed == mp.mailboxed &&
-				timeout == mp.timeout &&
-				deadline == mp.deadline);
+	bool operator == (const message_policy& rhs) const {
+		return (send_to_all_hosts == rhs.send_to_all_hosts &&
+				urgent == rhs.urgent &&
+				mailboxed == rhs.mailboxed &&
+				timeout == rhs.timeout &&
+				deadline == rhs.deadline);
 	}
 
-	bool operator != (const message_policy& mp) const {
-		return !(*this == mp);
+	bool operator != (const message_policy& rhs) const {
+		return !(*this == rhs);
 	}
 
 	bool send_to_all_hosts;
     bool urgent;
     bool mailboxed;
-    float timeout;
-    float deadline;
+    double timeout;
+    double deadline;
+    int max_timeout_retries;
 };
 
 struct lsd_types {

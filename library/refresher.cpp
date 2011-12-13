@@ -1,16 +1,13 @@
-#include "settings.h"
-
-#include <iostream>
-
-#include <boost/bind.hpp>
-
 #include "details/refresher.hpp"
 
-namespace pmq {
+#include <iostream>
+#include <boost/bind.hpp>
 
-refresher::refresher(boost::function<void()> f, boost::uint32_t timeout) :
+namespace lsd {
+
+refresher::refresher(boost::function<void()> f, boost::uint32_t timeout_seconds) :
 	f_(f),
-	timeout_(timeout),
+	timeout_(timeout_seconds),
 	stopping_(false),
 	refreshing_thread_(boost::bind(&refresher::refreshing_thread, this)) {
 }
@@ -23,6 +20,10 @@ refresher::~refresher() {
 
 void
 refresher::refreshing_thread() {
+	if (!stopping_ && f_) {
+		f_();
+	}
+
 	while (!stopping_) {
 		boost::mutex::scoped_lock lock(mutex_);
 		boost::xtime t;
@@ -37,4 +38,4 @@ refresher::refreshing_thread() {
 	}
 }
 
-} // namespace pmq
+} // namespace lsd

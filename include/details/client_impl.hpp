@@ -1,46 +1,91 @@
-#ifndef _PMQ_CLIENT_IMPL_HPP_INCLUDED_
-#define _PMQ_CLIENT_IMPL_HPP_INCLUDED_
+#ifndef _LSD_CLIENT_IMPL_HPP_INCLUDED_
+#define _LSD_CLIENT_IMPL_HPP_INCLUDED_
 
+#include <string>
+#include <vector>
+#include <map>
 #include <memory>
 #include <zmq.hpp>
 
-#include <boost/thread/thread.hpp>
-#include <boost/thread/condition.hpp>
-#include <boost/shared_ptr.hpp>
+#include <boost/function.hpp>
 #include <boost/date_time.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/thread/mutex.hpp>
 
-#include "heartbeat_notifier.hpp"
-#include "client_context.hpp"
-#include "smart_logger.hpp"
+#include "details/context.hpp"
+#include "details/service.hpp"
+#include "details/heartbeats_collector.hpp"
 
-namespace pmq {
+namespace lsd {
 
-class client_impl : private boost::noncopyable  {
-
+class client_impl : private boost::noncopyable {
 public:
-	client_impl(const std::string& service_prefix, const std::string& config_path);
+	explicit client_impl(const std::string& config_path = "");
 	virtual ~client_impl();
-	
+
 	void connect();
+	void disconnect();
 
-private:
-	void run();
-	void configure_heartbeat(const std::string& service_id, const std::string& ip, unsigned short port);
+	// send binary data
+	std::string send_message(const void* data,
+							 size_t size,
+							 const std::string& service_name,
+							 const std::string& handle_name);
+
+	std::string send_message(const void* data,
+							 size_t size,
+							 const message_path& path);
+
+	std::string send_message(const void* data,
+							 size_t size,
+							 const message_path& path,
+							 const message_policy& policy);
+
+	// send string data
+	std::string send_message(const std::string& data,
+							 const std::string& service_name,
+							 const std::string& handle_name);
+
+	std::string send_message(const std::string& data,
+							 const message_path& path);
+
+	std::string send_message(const std::string& data,
+							 const message_path& path,
+							 const message_policy& policy);
+
+	void set_response_callback(boost::function<void(const std::string&, void* data, size_t size)> callback);
+	size_t messages_cache_size() const;
+
 	boost::shared_ptr<base_logger> logger();
-	
-private:
-	boost::shared_ptr<client_context> context_;
+	boost::shared_ptr<configuration> config();
+	boost::shared_ptr<lsd::context> context();
 
-	std::auto_ptr<pmq::heartbeat_notifier> heartbeat_notifier_;
-    std::auto_ptr<zmq::socket_t> zmq_socket_;
-	
-	boost::thread thread_;
-	boost::condition condition_;
+private:
+	void update_messages_cache_size();
+	void service_hosts_pinged_callback(const service_info_t& s_info, const std::vector<host_info_t>& hosts, const std::vector<handle_info_t>& handles);
+
+private:
+	typedef std::map<std::string, boost::shared_ptr<service_t> > services_map_t;
+
+private:
+	size_t messages_cache_size_;
+
+	// main lsd context
+	boost::shared_ptr<lsd::context> context_;
+
+	// lsd service name mapped to service
+	services_map_t services_;
+
+	// heartsbeat collector
+	std::auto_ptr<heartbeats_collector> heartbeats_collector_;
+
+	// message response callback
+	boost::function<void(const std::string&, void* data, size_t size)> response_callback_;
+
+	// synchronization
 	boost::mutex mutex_;
-	
-	volatile bool is_running_;
 };
 
-} // namespace pmq
+} // namespace lsd
 
-#endif // _PMQ_CLIENT_IMPL_HPP_INCLUDED_
+#endif // _LSD_CLIENT_IMPL_HPP_INCLUDED_

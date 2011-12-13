@@ -1,11 +1,8 @@
-#ifndef _PQM_SMART_LOGGER_HPP_INCLUDED_
-#define _PQM_SMART_LOGGER_HPP_INCLUDED_
-
-#include "settings.h"
+#ifndef _LSD_SMART_LOGGER_HPP_INCLUDED_
+#define _LSD_SMART_LOGGER_HPP_INCLUDED_
 
 #include <fstream>
 #include <iostream>
-#include <stdexcept>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -13,7 +10,11 @@
 #include <syslog.h>
 #include <time.h>
 
-namespace pmq {
+#include <boost/current_function.hpp>
+
+#include "details/error.hpp"
+
+namespace lsd {
 
 #define PLOG_NONE		(0x0)
 #define PLOG_INFO		(0x1 << 0)
@@ -21,7 +22,8 @@ namespace pmq {
 #define PLOG_WARNING	(0x1 << 2)
 #define PLOG_ERROR		(0x1 << 3)
 #define PLOG_MSG_TYPES	(0x1 << 4)
-#define PLOG_ALL		(PLOG_INFO | PLOG_DEBUG | PLOG_WARNING | PLOG_ERROR)
+#define PLOG_MSG_TIME	(0x1 << 5)
+#define PLOG_ALL		(PLOG_MSG_TIME | PLOG_INFO | PLOG_DEBUG | PLOG_WARNING | PLOG_ERROR)
 
 class base_logger {
 public:
@@ -42,18 +44,28 @@ public:
 	std::string get_message_prefix(unsigned int message_type) {
 		std::string prefix;
 
+		time_t now = time(NULL);
+		if ((flags_ & PLOG_MSG_TIME) == PLOG_MSG_TIME) {
+			struct tm* ptm = localtime(&now);
+			char buffer[32];
+			strftime (buffer, 32, "%H:%M:%S", ptm);
+			prefix += "[";
+			prefix += buffer;
+			prefix += "]";
+		}
+
 		if ((flags_ & PLOG_MSG_TYPES) == PLOG_MSG_TYPES) {
 			if ((message_type & PLOG_INFO) == PLOG_INFO) {
-				prefix = "[INFO] ";
+				prefix += "[INFO] ";
 			}
 			else if ((message_type & PLOG_DEBUG) == PLOG_DEBUG) {
-				prefix = "[DEBUG] ";
+				prefix += "[DEBUG] ";
 			}
 			else if ((message_type & PLOG_WARNING) == PLOG_WARNING) {
-				prefix = "[WARNING] ";
+				prefix += "[WARNING] ";
 			}
 			else if ((message_type & PLOG_ERROR) == PLOG_ERROR) {
-				prefix = "[ERROR] ";
+				prefix += "[ERROR] ";
 			}		
 		}
 		
@@ -139,12 +151,12 @@ public:
 		}
 		catch (...) {
 			file_.close();
-			throw std::runtime_error(error_msg);
+			throw error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
 		if (!file_.is_open()) {
 			file_.close();
-			throw std::runtime_error(error_msg);
+			throw error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
 		file_ << first_message_;
@@ -165,7 +177,7 @@ public:
 
 		if (!file_.is_open()) {
 			file_.close();
-			throw std::runtime_error(error_msg);
+			throw error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
 		file_ << get_message_prefix(type) << message << "\n" << std::flush;
@@ -285,6 +297,6 @@ public:
 	}
 };
 
-} // namespace pmq
+} // namespace lsd
 
-#endif // _PQM_SMART_LOGGER_HPP_INCLUDED_
+#endif // _LSD_SMART_LOGGER_HPP_INCLUDED_

@@ -1,33 +1,29 @@
-#include "settings.h"
+#include <fstream>
+#include <stdexcept>
 
 #include <boost/current_function.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/algorithm/string.hpp>
 
-#include <fstream>
-#include <stdexcept>
-
 #include "json/json.h"
 
 #include "details/configuration.hpp"
-#include "details/structs.hpp"
 
-namespace pmq {
+namespace lsd {
 
 configuration::configuration() :
 	version_ (0),
 	message_timeout_(MESSAGE_TIMEOUT),
 	socket_poll_timeout_(DEFAULT_SOCKET_POLL_TIMEOUT),
+	max_message_cache_size_(DEFAULT_MAX_MESSAGE_CACHE_SIZE),
 	logger_type_(STDOUT_LOGGER),
 	logger_flags_(PLOG_NONE),
 	eblob_path_(DEFAULT_EBLOB_PATH),
 	eblob_log_path_(DEFAULT_EBLOB_LOG_PATH),
 	eblob_log_flags_(DEFAULT_EBLOB_LOG_FLAGS),
 	eblob_sync_interval_(DEFAULT_EBLOB_SYNC_INTERVAL),
-	autodiscovery_type_(AT_CONDUCTOR),
-	conductor_url_(DEFAULT_CONDUCTOR_URL),
-	control_port_(DEFAULT_CONTROL_PORT),
+	autodiscovery_type_(AT_HTTP),
 	multicast_ip_(DEFAULT_MULTICAST_IP),
 	multicast_port_(DEFAULT_MULTICAST_PORT)
 {
@@ -39,15 +35,14 @@ configuration::configuration(const std::string& path) :
 	version_ (0),
 	message_timeout_(MESSAGE_TIMEOUT),
 	socket_poll_timeout_(DEFAULT_SOCKET_POLL_TIMEOUT),
+	max_message_cache_size_(DEFAULT_MAX_MESSAGE_CACHE_SIZE),
 	logger_type_(STDOUT_LOGGER),
 	logger_flags_(PLOG_NONE),
 	eblob_path_(DEFAULT_EBLOB_PATH),
 	eblob_log_path_(DEFAULT_EBLOB_LOG_PATH),
 	eblob_log_flags_(DEFAULT_EBLOB_LOG_FLAGS),
 	eblob_sync_interval_(DEFAULT_EBLOB_SYNC_INTERVAL),
-	autodiscovery_type_(AT_CONDUCTOR),
-	conductor_url_(DEFAULT_CONDUCTOR_URL),
-	control_port_(DEFAULT_CONTROL_PORT),
+	autodiscovery_type_(AT_HTTP),
 	multicast_ip_(DEFAULT_MULTICAST_IP),
 	multicast_port_(DEFAULT_MULTICAST_PORT)
 {
@@ -60,12 +55,14 @@ configuration::~configuration() {
 
 void
 configuration::load(const std::string& path) {
+	boost::mutex::scoped_lock lock(mutex_);
+
 	path_ = path;
 
 	std::ifstream file(path.c_str(), std::ifstream::in);
 	
 	if (!file.is_open()) {
-		throw std::runtime_error("config file: " + path + " failed to open at: " + std::string(BOOST_CURRENT_FUNCTION));
+		throw error("config file: " + path + " failed to open at: " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
 	std::string config_data;
@@ -81,17 +78,33 @@ configuration::load(const std::string& path) {
 	bool parsing_successful = reader.parse(config_data, root);
 		
 	if (!parsing_successful) {
-		throw std::runtime_error("config file: " + path + " could not be parsed at: " + std::string(BOOST_CURRENT_FUNCTION));
+		throw error("config file: " + path + " could not be parsed at: " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 	
-	const Json::Value config_value = root["pmq"];
+	const Json::Value config_value = root["lsd_config"];
 	
 	try {
 		version_ = config_value.get("config_version", 0).asUInt();
-		
-		message_timeout_ = config_value.get("message_timeout", MESSAGE_TIMEOUT).asDouble();
-		socket_poll_timeout_ = config_value.get("socket_poll_timeout", DEFAULT_SOCKET_POLL_TIMEOUT).asInt();
-		
+		message_timeout_ = (unsigned long long)config_value.get("message_timeout", (int)MESSAGE_TIMEOUT).asInt();
+		socket_poll_timeout_ = (unsigned long long)config_value.get("socket_poll_timeout", (int)DEFAULT_SOCKET_POLL_TIMEOUT).asInt();
+		max_message_cache_size_ = (size_t)config_value.get("max_message_cache_size", (int)DEFAULT_MAX_MESSAGE_CACHE_SIZE).asInt();
+		max_message_cache_size_ *= 1048576; // convert mb to bytes
+
+		std::string message_cache_type_str = config_value.get("message_cache_type", "RAM_ONLY").asString();
+
+		if (message_cache_type_str == "PERSISTANT") {
+			message_cache_type_ = PERSISTANT;
+		}
+		else if (message_cache_type_str == "RAM_ONLY") {
+			message_cache_type_ = RAM_ONLY;
+		}
+		else {
+			std::string error_str = "unknown message cache type: " + message_cache_type_str;
+			error_str += "message_cache_type property can only take RAM_ONLY or PERSISTANT as value. ";
+			error_str += "at " + std::string(BOOST_CURRENT_FUNCTION);
+			throw error(error_str);
+		}
+
 		std::string log_type = config_value.get("log_type", "STDOUT_LOGGER").asString();
 		
 		if (log_type == "STDOUT_LOGGER") {
@@ -135,6 +148,9 @@ configuration::load(const std::string& path) {
 			else if (flag == "PLOG_ALL") {
 				logger_flags_ |= PLOG_ALL;
 			}
+			else if (flag == "PLOG_MSG_TIME") {
+				logger_flags_ |= PLOG_MSG_TIME;
+			}
 		}
 		
 		logger_file_path_  = config_value.get("log_file", "").asString();
@@ -149,53 +165,77 @@ configuration::load(const std::string& path) {
 		
 		const Json::Value autodiscovery_value = config_value["autodiscovery"];
 		
-		std::string atype = autodiscovery_value.get("type", "CONDUCTOR").asString();
-		if (atype == "CONDUCTOR") {
-			autodiscovery_type_ = AT_CONDUCTOR;
+		std::string atype = autodiscovery_value.get("type", "HTTP").asString();
+		if (atype == "HTTP") {
+			autodiscovery_type_ = AT_HTTP;
 		}
 		else if (atype == "MULTICAST") {
 			autodiscovery_type_ = AT_MULTICAST;
 		}
-	
-		conductor_url_ = autodiscovery_value.get("url", DEFAULT_CONDUCTOR_URL).asString();
-		control_port_ = autodiscovery_value.get("control_port", DEFAULT_CONDUCTOR_URL).asUInt();
+
 		multicast_ip_ = autodiscovery_value.get("multicast_ip", DEFAULT_MULTICAST_IP).asString();
 		multicast_port_ = autodiscovery_value.get("multicast_port", DEFAULT_MULTICAST_PORT).asUInt();
 		
 		const Json::Value services_value = config_value["services"];
 		
-		service_info si;
+		service_info_t si;
 		
 		for (size_t index = 0; index < services_value.size(); ++index) {
 			const Json::Value service_value = services_value[index];
-			si.prefix_ = service_value.get("prefix", "").asString();
+			si.description_ = service_value.get("description", "").asString();
 			si.name_ = service_value.get("name", "").asString();
-			si.conductor_name_ = service_value.get("conductor_name", "").asString();
-			si.messages_port_ = service_value.get("messages_port", 0).asUInt();
+			si.app_name_ = service_value.get("app_name", "").asString();
+			si.instance_ = service_value.get("instance", "").asString();
+			si.hosts_url_ = service_value.get("hosts_url", "").asString();
+			si.control_port_ = service_value.get("control_port", DEFAULT_CONTROL_PORT).asUInt();
 			
 			// check values for validity
-			if (si.prefix_.empty()) {
-				throw std::runtime_error("service with no prefix was found in config!");
+			if (si.name_.empty()) {
+				throw error("service with no name was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+			}
+
+			if (si.app_name_.empty()) {
+				throw error("service with no application name was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 			
-			if (si.conductor_name_.empty()) {
-				throw std::runtime_error("service with no conductor name was found in config!");
+			if (si.instance_.empty()) {
+				throw error("service with no instance was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+			}
+
+			if (si.hosts_url_.empty()) {
+				throw error("service with no hosts_url was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 			
-			if (si.messages_port_ == 0) {
-				throw std::runtime_error("service with no messages port == 0 was found in config!");
+			if (si.control_port_ == 0) {
+				throw error("service with no control port == 0 was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
 			}
 			
-			std::map<std::string, service_info>::iterator it = services_list_.find(si.prefix_);
-			if (it != services_list_.end()) {
-				throw std::runtime_error("duplicate service with prefix " + si.prefix_ + " was found in config!");
+			// check for duplicate services
+			std::map<std::string, service_info_t>::iterator it = services_list_.begin();
+			for (;it != services_list_.end(); ++it) {
+				if (it->second.name_ == si.name_) {
+					throw error("duplicate service with name " + si.name_ + " was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION));
+				}
 			}
-			
-			services_list_[si.prefix_] = si;
+
+			// no service can have the same app_name + control_port
+			it = services_list_.begin();
+			for (;it != services_list_.end(); ++it) {
+				if (it->second == si) {
+					std::string error_msg = "duplicate service with app name " + si.app_name_ + " and ";
+					error_msg += "control port " + boost::lexical_cast<std::string>(si.control_port_) + " was found in config! at: " + std::string(BOOST_CURRENT_FUNCTION);
+					throw error(error_msg);
+				}
+			}
+
+			services_list_[si.name_] = si;
 		}
 	}
-	catch (...) {
-		throw std::runtime_error("config file: " + path + " could not be parsed at: " + std::string(BOOST_CURRENT_FUNCTION));
+	catch (const std::exception& ex) {
+		std::string error_msg = "config file: " + path + " could not be parsed. details: ";
+		error_msg += ex.what();
+		error_msg += " at: " + std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_msg);
 	}
 }
 
@@ -209,14 +249,24 @@ configuration::config_version() const {
 	return version_;
 }
 
-double
+unsigned long long
 configuration::message_timeout() const {
 	return message_timeout_;
 }
 
-int
+unsigned long long
 configuration::socket_poll_timeout() const {
 	return socket_poll_timeout_;
+}
+
+size_t
+configuration::max_message_cache_size() const {
+	return max_message_cache_size_;
+}
+
+enum message_cache_type
+configuration::message_cache_type() const {
+	return message_cache_type_;
 }
 
 enum logger_type
@@ -265,16 +315,6 @@ configuration::autodiscovery_type() const {
 }
 
 std::string
-configuration::conductor_url() const {
-	return conductor_url_;
-}
-
-unsigned short
-configuration::control_port() const {
-	return control_port_;
-}
-
-std::string
 configuration::multicast_ip() const {
 	return multicast_ip_;
 }
@@ -284,21 +324,32 @@ configuration::multicast_port() const {
 	return multicast_port_;
 }
 
-const std::map<std::string, service_info>&
+const std::map<std::string, service_info_t>&
 configuration::services_list() const {
 	return services_list_;
 }
 
-service_info
-configuration::service_by_prefix(const std::string& service_prefix) const {
-	std::map<std::string, service_info>::const_iterator it = services_list_.find(service_prefix);
+bool
+configuration::service_info_by_name(const std::string& name, service_info_t& info) const {
+	std::map<std::string, service_info_t>::const_iterator it = services_list_.find(name);
 	
 	if (it != services_list_.end()) {
-		return it->second;
+		info = it->second;
+		return true;
 	}
-	else {
-		throw std::runtime_error("no info for service with prefix " + service_prefix + " at: " + std::string(BOOST_CURRENT_FUNCTION));
+
+	return false;
+}
+
+bool
+configuration::service_info_by_name(const std::string& name) const {
+	std::map<std::string, service_info_t>::const_iterator it = services_list_.find(name);
+
+	if (it != services_list_.end()) {
+		return true;
 	}
+
+	return false;
 }
 
 std::ostream& operator<<(std::ostream& out, configuration& config) {
@@ -361,28 +412,24 @@ std::ostream& operator<<(std::ostream& out, configuration& config) {
 	if (config.autodiscovery_type_ == AT_MULTICAST) {
 		out << "autodiscovery type: MULTICAST" << "\n";
 	}
-	else if (config.autodiscovery_type_ == AT_CONDUCTOR) {
-		out << "autodiscovery type: CONDUCTOR" << "\n";
+	else if (config.autodiscovery_type_ == AT_HTTP) {
+		out << "autodiscovery type: HTTP" << "\n";
 	}
-	
-	out << "conductor url: " << config.conductor_url_ << "\n";
-	out << "control port: " << config.control_port_ << "\n";
+
 	out << "multicast ip: " << config.multicast_ip_ << "\n";
 	out << "multicast port: " << config.multicast_port_ << "\n\n";
 	
 	out << "services: " << "\n";
-	std::map<std::string, service_info>& sl = config.services_list_;
+	std::map<std::string, service_info_t>& sl = config.services_list_;
 	
-	for (std::map<std::string, service_info>::iterator it = sl.begin(); it != sl.end(); ++it) {
-		out << "name: " << it->second.name_ << "\n";
-		out << "prefix: " << it->second.prefix_ << "\n";
-		out << "conductor name: " << it->second.conductor_name_ << "\n";
-		out << "messages port: " << it->second.messages_port_ << "\n\n";
+	for (std::map<std::string, service_info_t>::iterator it = sl.begin(); it != sl.end(); ++it) {
+		out << "\n    description: " << it->second.description_ << "\n";
+		out << "    name: " << it->second.name_ << "\n";
+		out << "    hosts url: " << it->second.hosts_url_ << "\n";
+		out << "    control port: " << it->second.control_port_ << "\n";
 	}
-	
-	//services_list_
 	
 	return out;
 }
 
-} // namespace pmq
+} // namespace lsd

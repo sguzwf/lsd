@@ -1,5 +1,5 @@
-#ifndef _PMQ_HEARTBEATS_COLLECTOR_HPP_INCLUDED_
-#define _PMQ_HEARTBEATS_COLLECTOR_HPP_INCLUDED_
+#ifndef _LSD_HEARTBEATS_COLLECTOR_HPP_INCLUDED_
+#define _LSD_HEARTBEATS_COLLECTOR_HPP_INCLUDED_
 
 #include <string>
 #include <map>
@@ -8,21 +8,25 @@
 #include <boost/date_time.hpp>
 #include <boost/bind.hpp>
 
-#include "smart_logger.hpp"
-#include "structs.hpp"
+#include "lsd/structs.hpp"
 
-namespace pmq {
+#include "details/host_info.hpp"
+#include "details/handle_info.hpp"
+#include "details/smart_logger.hpp"
+#include "details/configuration.hpp"
+
+namespace lsd {
 
 class heartbeats_collector {
 public:
+	typedef boost::function<void(const service_info_t&, const std::vector<host_info_t>&, const std::vector<handle_info_t>&)> callback_t;
+
 	virtual void run() = 0;
-	virtual void set_callback(boost::function<void(const std::string&)> f) = 0;
-	virtual std::multimap<std::string, host_heartbeat> get_all_hosts() const = 0;
-	virtual std::vector<host_info> get_hosts_by_group(const std::string& group) const = 0;
-	virtual void output_clients_info() = 0;
+	virtual void stop() = 0;
+	virtual void set_callback(callback_t callback) = 0;
 	virtual void set_logger(boost::shared_ptr<base_logger> logger) = 0;
 };
 
-} // namespace pmq
+} // namespace lsd
 
-#endif // _PMQ_HEARTBEATS_COLLECTOR_HPP_INCLUDED_
+#endif // _LSD_HEARTBEATS_COLLECTOR_HPP_INCLUDED_

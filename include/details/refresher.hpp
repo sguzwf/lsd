@@ -1,17 +1,17 @@
-#ifndef _PMQ_REFRESHER_HPP_INCLUDED_
-#define _PMQ_REFRESHER_HPP_INCLUDED_
+#ifndef _LSD_REFRESHER_HPP_INCLUDED_
+#define _LSD_REFRESHER_HPP_INCLUDED_
 
 #include <boost/function.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
 
-namespace pmq {
+namespace lsd {
 
 class refresher : private boost::noncopyable {
 
 public:
-	refresher(boost::function<void()> f, boost::uint32_t timeout); // timeout in secs
+	refresher(boost::function<void()> f, boost::uint32_t timeout_seconds); // timeout in secs
 	virtual ~refresher();
 
 private:
@@ -27,6 +27,6 @@ private:
 
 };
 
-} // namespace pmq
+} // namespace lsd
 
-#endif // _PMQ_REFRESHER_HPP_INCLUDED_
+#endif // _LSD_REFRESHER_HPP_INCLUDED_

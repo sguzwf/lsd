@@ -1,9 +1,9 @@
-#ifndef _PMQ_PROGRESS_TIMER_HPP_INCLUDED_
-#define _PMQ_PROGRESS_TIMER_HPP_INCLUDED_
+#ifndef _LSD_PROGRESS_TIMER_HPP_INCLUDED_
+#define _LSD_PROGRESS_TIMER_HPP_INCLUDED_
 
 #include <sys/time.h>
 
-namespace pmq {
+namespace lsd {
 
 class progress_timer {
 
@@ -18,17 +18,21 @@ public:
 	double elapsed();
 
 	static timeval get_precise_time();
-	static unsigned long long timeval_diff(timeval* end_time, timeval* start_time);
-	static unsigned long long timeval_diff(timeval* difference, timeval* end_time, timeval* start_time);
+	static unsigned long long timeval_diff(const timeval* end_time,
+										   const timeval* start_time);
 
-	static unsigned long long elapsed_microseconds_from_time(timeval* time);
-	static unsigned long long elapsed_milliseconds_from_time(timeval* time);
-	static double elapsed_from_time(timeval* time);
+	static unsigned long long timeval_diff(timeval* difference,
+										   const timeval* end_time,
+										   const timeval* start_time);
+
+	static unsigned long long elapsed_microseconds_from_time(const timeval* time);
+	static unsigned long long elapsed_milliseconds_from_time(const timeval* time);
+	static double elapsed_from_time(const timeval* time);
 
 private:
 	timeval begin_;
 };
 
-} // namespace pmq
+} // namespace lsd
 
-#endif // _PMQ_PROGRESS_TIMER_HPP_INCLUDED_
+#endif // _LSD_PROGRESS_TIMER_HPP_INCLUDED_

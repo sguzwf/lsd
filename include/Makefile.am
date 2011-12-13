@@ -1,1 +1,0 @@
-SUBDIRS = details pmq 

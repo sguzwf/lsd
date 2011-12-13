@@ -1,31 +1,41 @@
-#ifndef _PMQ_CONFIG_HPP_INCLUDED_
-#define _PMQ_CONFIG_HPP_INCLUDED_
+#ifndef _LSD_CONFIG_HPP_INCLUDED_
+#define _LSD_CONFIG_HPP_INCLUDED_
 
 #include <string>
 #include <map>
 #include <iostream>
 
-#include "structs.hpp"
-#include "smart_logger.hpp"
+#include <boost/thread/mutex.hpp>
+#include <boost/utility.hpp>
 
-namespace pmq {
+#include "lsd/structs.hpp"
+#include "details/service_info.hpp"
+#include "details/smart_logger.hpp"
+
+namespace lsd {
 
 class configuration;
 	
-std::ostream& operator<<(std::ostream& out, configuration& config);
+std::ostream& operator << (std::ostream& out, configuration& config);
 	
-class configuration {
+class configuration : private boost::noncopyable {
+public:
+	// map lsd service name to service info
+	typedef std::map<std::string, service_info_t> services_list_t;
+
 public:
 	configuration();
-	configuration(const std::string& path);
+	explicit configuration(const std::string& path);
 	virtual ~configuration();
 	
 	void load(const std::string& path);
 	
 	const std::string& config_path() const;
 	unsigned int config_version() const;
-	double message_timeout() const;
-	int socket_poll_timeout() const;
+	unsigned long long message_timeout() const;
+	unsigned long long socket_poll_timeout() const;
+	size_t max_message_cache_size() const;
+	enum message_cache_type message_cache_type() const;
 	
 	enum logger_type logger_type() const;
 	unsigned int logger_flags() const;
@@ -38,13 +48,12 @@ public:
 	int eblob_sync_interval() const;
 	
 	enum autodiscovery_type autodiscovery_type() const;
-	std::string conductor_url() const;
-	unsigned short control_port() const;
 	std::string multicast_ip() const;
 	unsigned short multicast_port() const;
 	
-	const std::map<std::string, service_info>& services_list() const;
-	service_info service_by_prefix(const std::string& service_prefix) const;
+	const services_list_t& services_list() const;
+	bool service_info_by_name(const std::string& name, service_info_t& info) const;
+	bool service_info_by_name(const std::string& name) const;
 	
 	friend std::ostream& operator<<(std::ostream& out, configuration& config);
 	
@@ -54,8 +63,10 @@ private:
 	unsigned int version_;
 	
 	// general
-	double message_timeout_;
-	int socket_poll_timeout_;
+	unsigned long long message_timeout_;
+	unsigned long long socket_poll_timeout_;
+	size_t max_message_cache_size_;
+	enum message_cache_type message_cache_type_;
 	
 	// logger
 	enum logger_type logger_type_;
@@ -71,15 +82,16 @@ private:
 	
 	// autodiscovery
 	enum autodiscovery_type autodiscovery_type_;
-	std::string conductor_url_;
-	unsigned short control_port_;
 	std::string multicast_ip_;
 	unsigned short multicast_port_;
 	
 	// services
-	std::map<std::string, service_info> services_list_;
+	services_list_t services_list_;
+
+	// synchronization
+	boost::mutex mutex_;
 };
 
-} // namespace pmq
+} // namespace lsd
 
-#endif // _PMQ_CONFIG_HPP_INCLUDED_
+#endif // _LSD_CONFIG_HPP_INCLUDED_

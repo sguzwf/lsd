@@ -18,7 +18,7 @@ class data_container {
 public:
 	data_container();
 	data_container(const void* data, size_t size);
-	data_container(const data_container& dc);
+	explicit data_container(const data_container& dc);
 	virtual ~data_container();
 	
 	data_container& operator = (const data_container& rhs);

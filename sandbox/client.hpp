@@ -15,7 +15,7 @@ namespace lsd {
 
 class client : private boost::noncopyable {
 public:
-	client(const std::string& config_path = "");
+	explicit client(const std::string& config_path = "");
 	virtual ~client();
 
 	void connect();

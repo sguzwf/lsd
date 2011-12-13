@@ -6,6 +6,7 @@
 #include <iostream>
 
 #include <boost/thread/mutex.hpp>
+#include <boost/utility.hpp>
 
 #include "structs.hpp"
 #include "service_info.hpp"
@@ -15,16 +16,16 @@ namespace lsd {
 
 class configuration;
 	
-std::ostream& operator<<(std::ostream& out, configuration& config);
+std::ostream& operator << (std::ostream& out, configuration& config);
 	
-class configuration {
+class configuration : private boost::noncopyable {
 public:
 	// map lsd service name to service info
 	typedef std::map<std::string, service_info_t> services_list_t;
 
 public:
 	configuration();
-	configuration(const std::string& path);
+	explicit configuration(const std::string& path);
 	virtual ~configuration();
 	
 	void load(const std::string& path);

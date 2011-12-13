@@ -17,7 +17,7 @@ namespace lsd {
 
 class context : private boost::noncopyable {
 public:
-	context(const std::string& config_path = "");
+	explicit context(const std::string& config_path = "");
 	virtual ~context();
 
 	boost::shared_ptr<base_logger> logger();

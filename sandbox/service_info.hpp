@@ -17,12 +17,7 @@ class service_info {
 public:	
 	service_info() {};
 	service_info(const service_info<LSD_T>& info) {
-		this->name_ = info.name_;
-		this->description_ = info.description_;
-		this->app_name_ = info.app_name_;
-		this->instance_ = info.instance_;
-		this->hosts_url_ = info.hosts_url_;
-		this->control_port_ = info.control_port_;
+		*this = info;
 	};
 
 	service_info (const std::string& name,
@@ -37,11 +32,11 @@ public:
 					  hosts_url_(hosts_url),
 					  control_port_(DEFAULT_CONTROL_PORT) {};
 	
-	bool operator == (const service_info& si) {
-		return (name_ == si.name_ &&
-				hosts_url_ == si.hosts_url_ &&
-				instance_ == si.instance_ &&
-				control_port_ == si.control_port_);
+	bool operator == (const service_info& rhs) {
+		return (name_ == rhs.name_ &&
+				hosts_url_ == rhs.hosts_url_ &&
+				instance_ == rhs.instance_ &&
+				control_port_ == rhs.control_port_);
 	};
 
 	// config-defined data

@@ -30,25 +30,25 @@ public:
 	host_info() : ip_(0) {
 	}
 	
-	host_info(const typename LSD_T::ip_addr ip) : 
+	explicit host_info(const typename LSD_T::ip_addr ip) :
 	ip_(ip) {
 		hostname_ = hostname_for_ip(ip);
 	}
 	
-	host_info(const std::string& ip) {
+	explicit host_info(const std::string& ip) {
 		ip_ = ip_from_string(ip);
 		hostname_ = hostname_for_ip(ip);
+	}
+
+	host_info(const host_info<LSD_T>& info) :
+	ip_(info.ip_), hostname_(info.hostname_) {
 	}
 	
 	host_info(const typename LSD_T::ip_addr ip, const std::string& hostname) :
 		ip_(ip), hostname_(hostname) {
 	}
-
-	host_info(const host_info<LSD_T>& info) : 
-	ip_(info.ip_), hostname_(info.hostname_) {
-	}
 	
-	bool operator==(const host_info<LSD_T>& info) {
+	bool operator == (const host_info<LSD_T>& info) {
 		return (ip_ == info.ip_ && hostname_ == info.hostname_);
 	}
 

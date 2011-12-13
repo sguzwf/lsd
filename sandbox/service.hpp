@@ -33,7 +33,7 @@ typedef service<LT> service_t;
 template<typename T> std::ostream& operator << (std::ostream& out, const service<T>& s);
 
 template <typename LSD_T>
-class service : public boost::noncopyable {
+class service : private boost::noncopyable {
 public:
 	typedef std::vector<host_info<LSD_T> > hosts_info_list_t;
 	typedef std::vector<handle_info<LSD_T> > handles_info_list_t;

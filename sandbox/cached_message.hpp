@@ -15,7 +15,7 @@ namespace lsd {
 class cached_message {
 public:
 	cached_message();
-	cached_message(const cached_message& message);
+	explicit cached_message(const cached_message& message);
 
 	cached_message(const message_path& path,
 				   const message_policy& policy,

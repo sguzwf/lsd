@@ -1,0 +1,60 @@
+{
+	"apps": {
+		"karma-engine": {
+			"pool":	{
+				"active":0,
+				"total":1
+			},
+			
+			"queue":0,
+			"running":true,
+			
+			"tasks": {
+				"aggregate": {
+					"interval":60.0,
+					"spent":0.08049154281616211,
+					"type":"timed+auto"
+				},
+					
+				"event": {
+					"endpoint":"elisto20f.dev.yandex.net:9100",
+					"route":"testing/elisto20f.dev.yandex.net/karma-engine/event",
+					"spent":4668.822898149490,
+					"type":"server+lsd"
+				}
+			}
+		},
+
+		"yaru-pinger": {
+			"pool": {
+				"active":0,
+				"total":2
+			},
+
+			"queue":0,
+			"running":true,
+
+			"tasks": {
+				"bulca": {
+					"interval":5.0,
+					"spent":4.232554674148560,
+					"type":"timed+auto"
+				},
+
+				"mysql":{
+					"interval":5.0,
+					"spent":24.64571356773376,
+					"type":"timed+auto"
+				}
+			}
+		}
+	},
+
+	"jobs": {
+		"done":40424,
+		"pending":0
+	},
+	
+	"sockets":6,
+	"workers":3
+}

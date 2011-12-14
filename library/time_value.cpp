@@ -110,7 +110,7 @@ time_value::get_current_time() {
 double
 time_value::distance(const time_value& rhs) {
 	if (this == &rhs) {
-		return 0;
+		return 0.0;
 	}
 
 	timeval temp_diff;

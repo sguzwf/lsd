@@ -9,6 +9,7 @@
 #include <msgpack.hpp>
 
 #include "lsd/client.hpp"
+//#include "details/time_value.hpp"
 
 typedef boost::mpl::list<int, long, unsigned char> test_types;
 
@@ -48,5 +49,10 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(first_test, T, test_types) {
 
 	BOOST_CHECK_EQUAL(1 == 1, true);
 }
+
+//BOOST_AUTO_TEST_CASE_TEMPLATE(time_value_test1, T, test_types) {
+//	lsd::time_value tv;
+//	BOOST_CHECK_EQUAL(tv.as_double(), 0.0);
+//}
 
 BOOST_AUTO_TEST_SUITE_END();

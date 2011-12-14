@@ -1,9 +1,24 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 PROJECT(Lsd)
 
-FIND_PACKAGE(Boost 1.40.0 REQUIRED 
+# define default build configuration options
+IF(NOT DEFINED BUILD_TESTS)
+	SET(BUILD_TESTS OFF)
+ENDIF()
+
+# display status message for important variables
+MESSAGE(STATUS "Build configuration:")
+MESSAGE(STATUS "-----------------------------------------------------")
+MESSAGE(STATUS "BUILD_TESTS = ${BUILD_TESTS}")
+MESSAGE(STATUS "Change a value with: cmake -D<Variable>=<Value>")
+MESSAGE(STATUS "-----------------------------------------------------")
+
+SET( BUILD_TESTS "${BUILD_TESTS}" CACHE BOOL "Set to OFF to skip building tests." FORCE )
+
+FIND_PACKAGE(Boost 1.40.0 REQUIRED
     COMPONENTS
-        thread)
+        thread-mt
+        unit_test_framework-mt)
 
 FIND_PACKAGE(OpenSSL REQUIRED)
 FIND_PACKAGE(CURL REQUIRED)
@@ -60,6 +75,16 @@ TARGET_LINK_LIBRARIES(lsd
     curl
     json
     ${LIBUUID_LIBRARIES})
+
+IF(BUILD_TESTS)
+	ADD_EXECUTABLE(lsd-tests
+        tests/main.cpp
+        tests/tests.cpp)
+        
+    TARGET_LINK_LIBRARIES(lsd-tests
+        boost_unit_test_framework-mt
+        lsd)
+ENDIF()
 
 SET_TARGET_PROPERTIES(lsd PROPERTIES
     VERSION 1)

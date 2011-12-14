@@ -152,7 +152,7 @@ message_cache::move_sent_message_to_new(const std::string& uuid) {
 
 	sent_messages_.erase(it);
 
-	msg->mark_as_unsent();
+	msg->mark_as_sent(false);
 	new_messages().push_back(msg);
 }
 
@@ -201,21 +201,9 @@ message_cache::process_timed_out_messages() {
 		}
 
 		// check whether it timed out
-		bool is_timed_out = false;
-		const timeval& timestamp = msg->sent_timestamp();
-
-		if (timestamp.tv_sec != 0 &&
-			timestamp.tv_usec != 0 &&
-			msg->policy().deadline > 0.0)
-		{
-			if (progress_timer::elapsed_from_time(&timestamp) > msg->policy().deadline) {
-				is_timed_out = true;
-			}
-		}
-
-		if (is_timed_out) {
+		if (msg->is_expired()) {
 			// move message to new
-			msg->mark_as_unsent();
+			msg->mark_as_sent(false);
 			new_messages().push_back(msg);
 
 			// remove from sent messages

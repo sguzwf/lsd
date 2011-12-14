@@ -9,6 +9,7 @@
 
 #include "lsd/structs.hpp"
 #include "details/data_container.hpp"
+#include "details/time_value.hpp"
 
 namespace lsd {
 
@@ -32,12 +33,9 @@ public:
 	const std::string& uuid() const;
 
 	bool is_sent() const;
-	void set_sent(bool value);
+	const time_value& sent_timestamp() const;
 
-	const timeval& sent_timestamp() const;
-	void set_sent_timestamp(const timeval& val);
-
-	void mark_as_unsent();
+	void mark_as_sent(bool value);
 
 	std::string json();
 	bool is_expired();
@@ -62,7 +60,7 @@ private:
 
 	// metadata
 	bool is_sent_;
-	timeval sent_timestamp_;
+	time_value sent_timestamp_;
 	size_t container_size_;
 	int timeout_retries_count_;
 

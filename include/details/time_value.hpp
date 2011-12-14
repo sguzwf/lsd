@@ -33,9 +33,11 @@ public:
 	bool operator < (const time_value& rhs) const;
 	bool operator <= (const time_value& rhs) const;
 
-	double distance(const time_value& rhs);
+	bool empty() const;
+	double distance(const time_value& rhs) const;
 	void init_from_current_time();
 	void drop_microseconds();
+	void reset();
 
 	time_value operator + (double interval);
 	time_value operator - (double interval);

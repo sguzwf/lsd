@@ -1,7 +1,7 @@
 #ifndef _LSD_PROGRESS_TIMER_HPP_INCLUDED_
 #define _LSD_PROGRESS_TIMER_HPP_INCLUDED_
 
-#include <sys/time.h>
+#include "details/time_value.hpp"
 
 namespace lsd {
 
@@ -12,25 +12,10 @@ public:
 	virtual ~progress_timer();
 
 	void reset();
-	
-	unsigned long long elapsed_microseconds();
-	unsigned long long elapsed_milliseconds();
-	double elapsed();
-
-	static timeval get_precise_time();
-	static unsigned long long timeval_diff(const timeval* end_time,
-										   const timeval* start_time);
-
-	static unsigned long long timeval_diff(timeval* difference,
-										   const timeval* end_time,
-										   const timeval* start_time);
-
-	static unsigned long long elapsed_microseconds_from_time(const timeval* time);
-	static unsigned long long elapsed_milliseconds_from_time(const timeval* time);
-	static double elapsed_from_time(const timeval* time);
+	time_value elapsed();
 
 private:
-	timeval begin_;
+	time_value begin_;
 };
 
 } // namespace lsd

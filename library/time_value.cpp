@@ -72,6 +72,16 @@ time_value::drop_microseconds() {
 }
 
 bool
+time_value::empty() const {
+	return (*this == time_value());
+}
+
+void
+time_value::reset() {
+	*this == time_value();
+}
+
+bool
 time_value::operator == (const time_value& rhs) const {
 	return (value_.tv_sec == rhs.value_.tv_sec &&
 			value_.tv_usec == rhs.value_.tv_usec);
@@ -127,7 +137,7 @@ time_value::init_from_current_time() {
 }
 
 double
-time_value::distance(const time_value& rhs) {
+time_value::distance(const time_value& rhs) const {
 	if (this == &rhs) {
 		return 0.0;
 	}

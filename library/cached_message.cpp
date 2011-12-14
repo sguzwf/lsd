@@ -45,8 +45,6 @@ cached_message::~cached_message() {
 
 void
 cached_message::init() {
-	sent_timestamp_.tv_sec = 0;
-	sent_timestamp_.tv_usec = 0;
 	gen_uuid();
 
 	// calc data size
@@ -109,7 +107,7 @@ cached_message::is_sent() const {
 	return is_sent_;
 }
 
-const timeval&
+const time_value&
 cached_message::sent_timestamp() const {
 	return sent_timestamp_;
 }
@@ -130,23 +128,17 @@ cached_message::container_size() const {
 }
 
 void
-cached_message::set_sent(bool value) {
+cached_message::mark_as_sent(bool value) {
 	boost::mutex::scoped_lock lock(mutex_);
-	is_sent_ = value;
-}
 
-void
-cached_message::set_sent_timestamp(const timeval& val) {
-	boost::mutex::scoped_lock lock(mutex_);
-	sent_timestamp_ = val;
-}
-
-void
-cached_message::mark_as_unsent() {
-	boost::mutex::scoped_lock lock(mutex_);
-	is_sent_ = false;
-	sent_timestamp_.tv_sec = 0;
-	sent_timestamp_.tv_usec = 0;
+	if (value) {
+		is_sent_ = false;
+		sent_timestamp_.init_from_current_time();
+	}
+	else {
+		is_sent_ = false;
+		sent_timestamp_.reset();
+	}
 }
 
 bool
@@ -155,12 +147,11 @@ cached_message::is_expired() {
 		return false;
 	}
 
-	timeval tv = progress_timer::get_precise_time();
+	if (time_value::get_current_time() > time_value(policy_.deadline)) {
+		return true;
+	}
 
-	double current_time = tv.tv_sec;
-	current_time += tv.tv_usec / 1000000.0f;
-
-	return (current_time > policy_.deadline);
+	return false;
 }
 
 std::string

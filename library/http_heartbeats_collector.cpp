@@ -154,12 +154,12 @@ http_heartbeats_collector::get_metainfo_from_host(const service_info_t& s_info,
 	poll_items[0].revents = 0;
 
 	// poll for responce
-	timeval tv = progress_timer::get_precise_time();
+	progress_timer timer;
 	int res = -1;
 
 	while (res <= 0) {
 		res = zmq_poll(poll_items, 1, DEFAULT_SOCKET_POLL_TIMEOUT);
-		if (progress_timer::elapsed_milliseconds_from_time(&tv) > DEFAULT_SOCKET_PING_TIMEOUT) {
+		if (timer.elapsed().milliseconds() > DEFAULT_SOCKET_PING_TIMEOUT) {
 			break;
 		}
 	}

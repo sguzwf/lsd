@@ -170,11 +170,9 @@ handle<LSD_T>::dispatch_messages() {
 		if (control_message > 0) {
 			dispatch_control_messages(control_message, main_socket);
 
-			timeval tv;
-			gettimeofday(&tv, NULL);
-
+			progress_timer timer;
 			while (true) {
-				if (progress_timer::elapsed_from_time(&tv) > 1.000) {
+				if (timer.elapsed().as_double() > 1.000) {
 					break;
 				}
 			}
@@ -187,17 +185,7 @@ handle<LSD_T>::dispatch_messages() {
 
 		// check for timed out messages
 		if (is_connected_ && is_running_) {
-			static bool started = false;
-			static timeval tv;
-			if (!started) {
-				gettimeofday(&tv, NULL);
-				started = true;
-			}
-
-			if (progress_timer::elapsed_from_time(&tv) > 1.0) {
-				gettimeofday(&tv, NULL);
-				messages_cache()->process_timed_out_messages();
-			}
+			messages_cache()->process_timed_out_messages();
 		}
 
 		/*
@@ -407,8 +395,7 @@ handle<LSD_T>::dispatch_next_available_message(socket_ptr_t main_socket) {
 		}
 
 		// assign message flags
-		new_msg.set_sent(true);
-		new_msg.set_sent_timestamp(progress_timer::get_precise_time());
+		new_msg.mark_as_sent(true);
 
 		// move message to sent
 		messages_cache()->move_new_message_to_sent();

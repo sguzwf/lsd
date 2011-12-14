@@ -57,6 +57,20 @@ time_value::seconds() const {
 	return value_.tv_sec;
 }
 
+long
+time_value::milliseconds() const {
+	return value_.tv_usec / 1000;
+}
+
+long time_value::microseconds() const {
+	return value_.tv_usec;
+}
+
+void
+time_value::drop_microseconds() {
+	value_.tv_usec = 0;
+}
+
 bool
 time_value::operator == (const time_value& rhs) const {
 	return (value_.tv_sec == rhs.value_.tv_sec &&
@@ -132,23 +146,37 @@ time_value::distance(const time_value& rhs) {
 	return distance / 1000000.0;
 }
 
-time_value&
+time_value
 time_value::operator + (double interval) {
+	return time_value(as_double() + interval);
+}
+
+time_value
+time_value::operator - (double interval) {
+	if (as_double() >= interval) {
+		return time_value(as_double() - interval);
+	}
+	else {
+		return time_value();
+	}
+}
+
+time_value&
+time_value::operator += (double interval) {
 	*this = time_value(as_double() + interval);
 	return *this;
 }
 
 time_value&
-time_value::operator - (double interval) {
+time_value::operator -= (double interval) {
 	if (as_double() >= interval) {
 		*this = time_value(as_double() - interval);
-		return *this;
 	}
 	else {
-		value_.tv_sec = 0;
-		value_.tv_usec = 0;
-		return *this;
+		*this = time_value();
 	}
+
+	return *this;
 }
 
 } // namespace lsd

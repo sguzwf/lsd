@@ -67,4 +67,41 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(time_value_test2, T, test_types) {
 	BOOST_CHECK_EQUAL(tv != tv2, false);
 }
 
+BOOST_AUTO_TEST_CASE_TEMPLATE(time_value_test3, T, test_types) {
+	lsd::time_value tv1, tv2;
+	tv1.init_from_current_time();
+
+	float t1 = tv1.as_double();
+	tv2 = tv1 + 1.5;
+	float t2 = tv2.as_double();
+
+	BOOST_CHECK_EQUAL(tv2 == tv1 + 1.5, true);
+	BOOST_CHECK_EQUAL(tv2 != tv1 + 1.5, false);
+
+	double distance = tv2.distance(tv1) - 1.5;
+	BOOST_CHECK_EQUAL(distance < 0.00000001, true);
+}
+
+BOOST_AUTO_TEST_CASE_TEMPLATE(time_value_test4, T, test_types) {
+	lsd::time_value tv1(136416213.5), tv2;
+	tv2 = tv1 + 21.0003;
+
+	BOOST_CHECK_EQUAL(tv1.days(), tv2.days());
+	BOOST_CHECK_EQUAL(tv1.hours(), tv2.hours());
+	BOOST_CHECK_EQUAL(tv1.minutes(), tv2.minutes());
+	BOOST_CHECK_EQUAL(tv1.seconds() == tv2.seconds(), false);
+	BOOST_CHECK_EQUAL(tv1.milliseconds() == tv2.milliseconds(), true);
+	BOOST_CHECK_EQUAL(tv1.microseconds() == tv2.microseconds(), false);
+}
+
+BOOST_AUTO_TEST_CASE_TEMPLATE(time_value_test5, T, test_types) {
+	lsd::time_value tv1(136416213.5), tv2;
+	tv2 += (tv1 + 1.5).as_double();
+
+	BOOST_CHECK_EQUAL(tv2 == tv1 + 1.5, true);
+	BOOST_CHECK_EQUAL(tv2 != tv1 + 1.5, false);
+	BOOST_CHECK_EQUAL(tv2 > tv1, true);
+	BOOST_CHECK_EQUAL(tv1 < tv2, true);
+}
+
 BOOST_AUTO_TEST_SUITE_END();

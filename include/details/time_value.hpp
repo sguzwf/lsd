@@ -21,6 +21,8 @@ public:
 	long hours() const;
 	long minutes() const;
 	long seconds() const;
+	long milliseconds() const;
+	long microseconds() const;
 
 	time_value& operator = (const time_value& rhs);
 
@@ -33,9 +35,12 @@ public:
 
 	double distance(const time_value& rhs);
 	void init_from_current_time();
+	void drop_microseconds();
 
-	time_value& operator + (double interval);
-	time_value& operator - (double interval);
+	time_value operator + (double interval);
+	time_value operator - (double interval);
+	time_value& operator += (double interval);
+	time_value& operator -= (double interval);
 
 	static time_value get_current_time();
 

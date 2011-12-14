@@ -10,11 +10,36 @@ class time_value {
 public:
 	time_value();
 	time_value(const time_value& tv);
+	time_value(const timeval& tv);
+	time_value(double tv);
 	virtual ~time_value();
+
+	double as_double() const;
+	timeval as_timeval() const;
+
+	long days() const;
+	long hours() const;
+	long minutes() const;
+	long seconds() const;
 
 	static time_value get_current_time();
 
-	timeval value;
+	time_value& operator = (const time_value& rhs);
+
+	bool operator == (const time_value& rhs) const;
+	bool operator != (const time_value& rhs) const;
+	bool operator > (const time_value& rhs) const;
+	bool operator >= (const time_value& rhs) const;
+	bool operator < (const time_value& rhs) const;
+	bool operator <= (const time_value& rhs) const;
+
+	double distance(const time_value& rhs);
+
+	time_value& operator + (double interval);
+	time_value& operator - (double interval);
+
+private:
+	timeval value_;
 };
 
 } // namespace lsd

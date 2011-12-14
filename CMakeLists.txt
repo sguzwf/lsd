@@ -80,6 +80,8 @@ IF(BUILD_TESTS)
         boost_unit_test_framework-mt
         lsd
         zmq)
+        
+    ADD_CUSTOM_TARGET(check COMMAND "./lsd-tests")
 ENDIF()
 
 SET_TARGET_PROPERTIES(lsd PROPERTIES

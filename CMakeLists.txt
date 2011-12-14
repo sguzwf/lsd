@@ -54,20 +54,12 @@ ADD_LIBRARY(json
 SET_TARGET_PROPERTIES(json PROPERTIES
     COMPILE_FLAGS -fPIC)
 
+FILE(GLOB lsd_SRC
+    "library/*.cpp"
+)
+
 ADD_LIBRARY(lsd SHARED
-    library/cached_message.cpp
-    library/cached_response.cpp
-    library/client_impl.cpp
-    library/client.cpp
-    library/configuration.cpp
-    library/context.cpp
-    library/curl_hosts_fetcher.cpp
-    library/data_container.cpp
-    library/error.cpp
-    library/http_heartbeats_collector.cpp
-    library/message_cache.cpp
-    library/progress_timer.cpp
-    library/refresher.cpp)
+    ${lsd_SRC})
 
 TARGET_LINK_LIBRARIES(lsd
     boost_thread-mt
@@ -77,13 +69,17 @@ TARGET_LINK_LIBRARIES(lsd
     ${LIBUUID_LIBRARIES})
 
 IF(BUILD_TESTS)
+    FILE(GLOB lsd_tests_SRC
+        "tests/*.cpp"
+    )
+    
 	ADD_EXECUTABLE(lsd-tests
-        tests/main.cpp
-        tests/tests.cpp)
-        
+        ${lsd_tests_SRC})
+
     TARGET_LINK_LIBRARIES(lsd-tests
         boost_unit_test_framework-mt
-        lsd)
+        lsd
+        zmq)
 ENDIF()
 
 SET_TARGET_PROPERTIES(lsd PROPERTIES

@@ -22,8 +22,6 @@ public:
 	long minutes() const;
 	long seconds() const;
 
-	static time_value get_current_time();
-
 	time_value& operator = (const time_value& rhs);
 
 	bool operator == (const time_value& rhs) const;
@@ -34,9 +32,12 @@ public:
 	bool operator <= (const time_value& rhs) const;
 
 	double distance(const time_value& rhs);
+	void init_from_current_time();
 
 	time_value& operator + (double interval);
 	time_value& operator - (double interval);
+
+	static time_value get_current_time();
 
 private:
 	timeval value_;

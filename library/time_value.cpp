@@ -107,6 +107,11 @@ time_value::get_current_time() {
 	return time_value(tv);
 }
 
+void
+time_value::init_from_current_time() {
+	*this = get_current_time();
+}
+
 double
 time_value::distance(const time_value& rhs) {
 	if (this == &rhs) {

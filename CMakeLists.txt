@@ -74,14 +74,15 @@ IF(BUILD_TESTS)
     )
     
 	ADD_EXECUTABLE(lsd-tests
-        ${lsd_tests_SRC})
+        ${lsd_tests_SRC}
+        library/time_value.cpp)
 
     TARGET_LINK_LIBRARIES(lsd-tests
         boost_unit_test_framework-mt
         lsd
         zmq)
         
-    ADD_CUSTOM_TARGET(check COMMAND "./lsd-tests")
+    ADD_CUSTOM_TARGET(check COMMAND make COMMAND ./lsd-tests)
 ENDIF()
 
 SET_TARGET_PROPERTIES(lsd PROPERTIES

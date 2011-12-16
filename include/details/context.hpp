@@ -17,6 +17,7 @@
 #include <string>
 #include <map>
 #include <memory>
+
 #include <zmq.hpp>
 
 #include <boost/shared_ptr.hpp>
@@ -37,11 +38,13 @@ public:
 	boost::shared_ptr<base_logger> logger();
 	boost::shared_ptr<configuration> config();
 	boost::shared_ptr<zmq::context_t> zmq_context();
+	boost::shared_ptr<statistics_collector> stats();
 
 private:
 	boost::shared_ptr<zmq::context_t> zmq_context_;
 	boost::shared_ptr<base_logger> logger_;
 	boost::shared_ptr<configuration> config_;
+	boost::shared_ptr<statistics_collector> stats_;
 
 	// synchronization
 	boost::mutex mutex_;

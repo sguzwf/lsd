@@ -253,19 +253,30 @@ handle<LSD_T>::receive_control_messages(socket_ptr_t& control_socket) {
     if ((ZMQ_POLLIN & poll_items[0].revents) == ZMQ_POLLIN) {
     	int received_message = 0;
 
+    	bool recv_failed = false;
     	zmq::message_t reply;
-    	try {
-    		control_socket->recv(&reply);
-    		memcpy((void *)&received_message, reply.data(), reply.size());
 
-    		return received_message;
+    	try {
+    		if (!control_socket->recv(&reply)) {
+    			recv_failed = true;
+    		}
+    		else {
+    			memcpy((void *)&received_message, reply.data(), reply.size());
+    			return received_message;
+    		}
     	}
     	catch (const std::exception& ex) {
-    			std::string error_msg = "some very ugly shit happend while recv on socket at ";
-    			error_msg += std::string(BOOST_CURRENT_FUNCTION);
-    			error_msg += " details: " + std::string(ex.what());
-    			throw error(error_msg);
+			std::string error_msg = "some very ugly shit happend while recv on socket at ";
+			error_msg += std::string(BOOST_CURRENT_FUNCTION);
+			error_msg += " details: " + std::string(ex.what());
+			throw error(error_msg);
     	}
+
+        if (recv_failed) {
+        	std::string sname = info_.service_name_;
+        	std::string hname = info_.name_;
+        	logger()->log("recv failed on service: %s, handle %s", sname.c_str(), hname.c_str());
+        }
     }
 
     return 0;

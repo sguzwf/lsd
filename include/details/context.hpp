@@ -12,6 +12,7 @@
 
 #include "details/smart_logger.hpp"
 #include "details/configuration.hpp"
+#include "details/statistics_collector.hpp"
 
 namespace lsd {
 

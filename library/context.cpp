@@ -11,6 +11,9 @@ context::context(const std::string& config_path) {
 
 	config_.reset(new configuration(config_path));
 
+	std::cout << *config_ << std::endl;
+	exit(0);
+
 	// create logger
 	switch (config_->logger_type()) {
 		case STDOUT_LOGGER:

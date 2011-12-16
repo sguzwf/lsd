@@ -49,7 +49,7 @@ void spawn_client() {
 }
 
 BOOST_AUTO_TEST_CASE_TEMPLATE(first_test, T, test_types) {
-	//spawn_client();
+	spawn_client();
 	BOOST_CHECK_EQUAL(1 == 1, true);
 }
 

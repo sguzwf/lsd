@@ -8,6 +8,8 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/utility.hpp>
 
+#include "json/json.h"
+
 #include "lsd/structs.hpp"
 #include "details/service_info.hpp"
 #include "details/smart_logger.hpp"
@@ -51,12 +53,25 @@ public:
 	std::string multicast_ip() const;
 	unsigned short multicast_port() const;
 	
+	bool is_statistics_enabled() const;
+	bool is_remote_statistics_enabled() const;
+	LT::port remote_statistics_port() const;
+
 	const services_list_t& services_list() const;
 	bool service_info_by_name(const std::string& name, service_info_t& info) const;
 	bool service_info_by_name(const std::string& name) const;
 	
 	friend std::ostream& operator<<(std::ostream& out, configuration& config);
 	
+private:
+	void parse_basic_settings(const Json::Value& config_value);
+	void parse_logger_settings(const Json::Value& config_value);
+	void parse_messages_cache_settings(const Json::Value& config_value);
+	void parse_persistant_storage_settings(const Json::Value& config_value);
+	void parse_autodiscovery_settings(const Json::Value& config_value);
+	void parse_statistics_settings(const Json::Value& config_value);
+	void parse_services_settings(const Json::Value& config_value);
+
 private:
 	// config
 	std::string path_;
@@ -85,6 +100,11 @@ private:
 	std::string multicast_ip_;
 	unsigned short multicast_port_;
 	
+	// statistics
+	bool is_statistics_enabled_;
+	bool is_remote_statistics_enabled_;
+	LT::port remote_statistics_port_;
+
 	// services
 	services_list_t services_list_;
 

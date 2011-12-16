@@ -23,6 +23,7 @@ static const std::string DEFAULT_HOSTS_URL = "";
 static const unsigned short DEFAULT_CONTROL_PORT = 5555;
 static const std::string DEFAULT_MULTICAST_IP = "226.1.1.1";
 static const unsigned short DEFAULT_MULTICAST_PORT = 5556;
+static const unsigned short DEFAULT_STATISTICS_PORT = 3333;
 static const size_t DEFAULT_MAX_MESSAGE_CACHE_SIZE = 512; // megabytes
 
 enum logger_type {

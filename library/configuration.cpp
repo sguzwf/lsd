@@ -423,6 +423,123 @@ configuration::service_info_by_name(const std::string& name) const {
 	return false;
 }
 
+std::string configuration::as_json() const {
+	Json::FastWriter writer;
+	Json::Value root;
+
+	Json::Value basic_settings;
+	basic_settings["1 - config version"] = version_;
+	basic_settings["2 - message timeout"] = (unsigned int)message_timeout_;
+	basic_settings["3 - socket poll timeout"] = (unsigned int)socket_poll_timeout_;
+	root["1 - basic settings"] = basic_settings;
+
+	Json::Value logger;
+	if (logger_type_ == STDOUT_LOGGER) {
+		logger["1 - type"] = "STDOUT_LOGGER";
+	}
+	else if (logger_type_ == FILE_LOGGER) {
+		logger["1 - type"] = "FILE_LOGGER";
+	}
+	else if (logger_type_ == SYSLOG_LOGGER) {
+		logger["1 - type"] = "SYSLOG_LOGGER";
+	}
+
+	std::string flags;
+
+	if (logger_flags_ == PLOG_NONE) {
+		flags = "PLOG_NONE";
+	}
+	else if (logger_flags_ == PLOG_ALL) {
+		flags = "PLOG_ALL";
+	}
+	else {
+		if ((logger_flags_ & PLOG_INFO) == PLOG_INFO) {
+			flags += "PLOG_INFO ";
+		}
+
+		if ((logger_flags_ & PLOG_DEBUG) == PLOG_DEBUG) {
+			flags += "PLOG_DEBUG ";
+		}
+
+		if ((logger_flags_ & PLOG_WARNING) == PLOG_WARNING) {
+			flags += "PLOG_WARNING ";
+		}
+
+		if ((logger_flags_ & PLOG_ERROR) == PLOG_ERROR) {
+			flags += "PLOG_ERROR ";
+		}
+
+		if ((logger_flags_ & PLOG_MSG_TYPES) == PLOG_MSG_TYPES) {
+			flags += "PLOG_MSG_TYPES ";
+		}
+	}
+
+	logger["2 - flags"] = flags;
+	logger["3 - file path"] = logger_file_path_;
+	logger["4 - syslog name"] = logger_syslog_name_;
+	root["2 - logger"] = logger;
+
+	Json::Value message_cache;
+	std::string mcache_size_str = boost::lexical_cast<std::string>(max_message_cache_size_ / 1048576);
+	mcache_size_str += " Mb";
+	message_cache["1 - max ram limit"] = mcache_size_str;
+
+	if (message_cache_type_ == RAM_ONLY) {
+		message_cache["2 - type"] = "RAM_ONLY";
+ 	}
+ 	else if (message_cache_type_ == PERSISTANT) {
+ 		message_cache["2 - type"] = "PERSISTANT";
+ 	}
+	root["3 - message cache"] = message_cache;
+
+	Json::Value persistant_storage;
+	persistant_storage["1 - eblob path"] = eblob_path_;
+	persistant_storage["2 - eblob log path"] = eblob_log_path_;
+	persistant_storage["3 - eblob log flags"] = eblob_log_flags_;
+	persistant_storage["4 - eblob sync interval"] = eblob_sync_interval_;
+	root["4 - persistant storage"] = persistant_storage;
+
+	Json::Value autodiscovery;
+	if (autodiscovery_type_ == AT_MULTICAST) {
+		autodiscovery["1 - type"] = "MULTICAST";
+	}
+	else if (autodiscovery_type_ == AT_HTTP) {
+		autodiscovery["1 - type"] = "HTTP";
+	}
+
+	autodiscovery["2 - multicast ip"] = multicast_ip_;
+	autodiscovery["3 - multicast port"] = multicast_port_;
+	root["5 - autodiscovery"] = autodiscovery;
+
+	Json::Value statistics;
+	statistics["1 - is statistics enabled"] = is_statistics_enabled_;
+	statistics["2 - is remote statistics_enabled"] = is_remote_statistics_enabled_;
+	statistics["3 - remote statistics port"] = remote_statistics_port_;
+	root["6 - statistics"] = statistics;
+
+	Json::Value services;
+	const std::map<std::string, service_info_t>& sl = services_list_;
+
+	int counter = 1;
+	std::map<std::string, service_info_t>::const_iterator it = sl.begin();
+	for (; it != sl.end(); ++it) {
+		Json::Value service;
+		service["1 - app name"] = it->second.app_name_;
+		service["2 - instance"] = it->second.instance_;
+		service["3 - description"] = it->second.description_;
+		service["4 - hosts url"] = it->second.hosts_url_;
+		service["5 - control port"] = it->second.control_port_;
+
+		std::string service_name = boost::lexical_cast<std::string>(counter);
+		service_name += " - " + it->second.name_;
+		services[service_name] = service;
+		++counter;
+	}
+	root["7 - services"] = services;
+
+	return writer.write(root);
+}
+
 std::string configuration::as_string() const {
 	std::stringstream out;
 
@@ -538,10 +655,11 @@ std::string configuration::as_string() const {
 	for (; it != sl.end(); ++it) {
 		out << "\n\tname: " << it->second.name_ << "\n";
 		out << "\tdescription: " << it->second.description_ << "\n";
+		out << "\n\tapp name: " << it->second.app_name_ << "\n";
 		out << "\thosts url: " << it->second.hosts_url_ << "\n";
 		out << "\tcontrol port: " << it->second.control_port_ << "\n";
 	}
-	
+
 	return out.str();
 }
 

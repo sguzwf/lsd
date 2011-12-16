@@ -278,6 +278,11 @@ statistics_collector::process_request_json(const std::string& request_json) {
 		return cache_stats_json();
 	}
 
+	// get all config data
+	if (action == "config") {
+		return config()->as_json();
+	}
+
 	return "";
 }
 

@@ -76,6 +76,7 @@ public:
 	
 	friend std::ostream& operator<<(std::ostream& out, configuration& config);
 	std::string as_string() const;
+	std::string as_json() const;
 	
 private:
 	void parse_basic_settings(const Json::Value& config_value);

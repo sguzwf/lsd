@@ -13,7 +13,7 @@ def main():
     # Statistics
     request.send_json({
     	'version' : 1,
-        'action': 'cache_stats'
+        'action': 'config'
     })
 
     pprint(request.recv_json())

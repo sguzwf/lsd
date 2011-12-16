@@ -18,7 +18,8 @@ SET( BUILD_TESTS "${BUILD_TESTS}" CACHE BOOL "Set to OFF to skip building tests.
 FIND_PACKAGE(Boost 1.40.0 REQUIRED
     COMPONENTS
         thread-mt
-        unit_test_framework-mt)
+        unit_test_framework-mt
+        program_options-mt)
 
 FIND_PACKAGE(OpenSSL REQUIRED)
 FIND_PACKAGE(CURL REQUIRED)
@@ -68,21 +69,30 @@ TARGET_LINK_LIBRARIES(lsd
     json
     ${LIBUUID_LIBRARIES})
 
+#build tests if defined by config
 IF(BUILD_TESTS)
-    FILE(GLOB lsd_tests_SRC
-        "tests/*.cpp"
-    )
-    
+    # unit tests
 	ADD_EXECUTABLE(lsd-tests
-        ${lsd_tests_SRC}
+        tests/main.cpp
+        tests/tests.cpp
         library/time_value.cpp)
 
     TARGET_LINK_LIBRARIES(lsd-tests
         boost_unit_test_framework-mt
         lsd
         zmq)
-        
+   
     ADD_CUSTOM_TARGET(check COMMAND make COMMAND ./lsd-tests)
+    
+    # test client
+	ADD_EXECUTABLE(lsd-client
+        tests/test_client_app.cpp)
+
+    TARGET_LINK_LIBRARIES(lsd-client
+        boost_unit_test_framework-mt
+        boost_program_options-mt
+        lsd
+        zmq)
 ENDIF()
 
 SET_TARGET_PROPERTIES(lsd PROPERTIES

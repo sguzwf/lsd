@@ -62,7 +62,7 @@ void spawn_client() {
 }
 
 BOOST_AUTO_TEST_CASE_TEMPLATE(first_test, T, test_types) {
-	spawn_client();
+	//spawn_client();
 	BOOST_CHECK_EQUAL(1 == 1, true);
 }
 
@@ -103,7 +103,7 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(time_value_test4, T, test_types) {
 	BOOST_CHECK_EQUAL(tv1.hours(), tv2.hours());
 	BOOST_CHECK_EQUAL(tv1.minutes(), tv2.minutes());
 	BOOST_CHECK_EQUAL(tv1.seconds() == tv2.seconds(), false);
-	BOOST_CHECK_EQUAL(tv1.milliseconds() == tv2.milliseconds(), true);
+	BOOST_CHECK_EQUAL(tv1.milliseconds(), tv2.milliseconds() - 21000);
 	BOOST_CHECK_EQUAL(tv1.microseconds() == tv2.microseconds(), false);
 }
 

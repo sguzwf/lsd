@@ -12,8 +12,8 @@ def main():
 
     # Statistics
     request.send_json({
-    	'handle': 'all',
-        'action': 'info'
+    	'version' : 1,
+        'action': 'cache_stats'
     })
 
     pprint(request.recv_json())

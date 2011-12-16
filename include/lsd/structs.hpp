@@ -22,6 +22,7 @@
 namespace lsd {
 
 static const int PROTOCOL_VERSION = 1;
+static const int STATISTICS_PROTOCOL_VERSION = 1;
 static const unsigned long long MESSAGE_TIMEOUT = 10;	// seconds
 static const unsigned long long HEARTBEAT_INTERVAL = 1;	// seconds
 static const unsigned long long DEFAULT_SOCKET_POLL_TIMEOUT = 2000; // milliseconds
@@ -38,6 +39,8 @@ static const std::string DEFAULT_MULTICAST_IP = "226.1.1.1";
 static const unsigned short DEFAULT_MULTICAST_PORT = 5556;
 static const unsigned short DEFAULT_STATISTICS_PORT = 3333;
 static const size_t DEFAULT_MAX_MESSAGE_CACHE_SIZE = 512; // megabytes
+
+
 
 enum logger_type {
 	STDOUT_LOGGER = 1,

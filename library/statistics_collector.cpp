@@ -22,6 +22,7 @@
 #include "details/statistics_collector.hpp"
 #include "details/error.hpp"
 #include "details/smart_logger.hpp"
+#include "lsd/structs.hpp"
 
 namespace lsd {
 
@@ -82,6 +83,8 @@ void
 statistics_collector::init() {
 	is_enabled_ = config_->is_statistics_enabled();
 
+	used_cache_size_ = 0;
+
 	if (config_->is_remote_statistics_enabled()) {
 		// run main thread
 		is_running_ = true;
@@ -101,7 +104,7 @@ statistics_collector::set_logger(boost::shared_ptr<base_logger> logger) {
 
 boost::shared_ptr<base_logger>
 statistics_collector::logger() {
-	boost::mutex::scoped_lock(mutex_);
+	boost::mutex::scoped_lock lock(mutex_);
 	return logger_;
 }
 
@@ -143,6 +146,8 @@ statistics_collector::process_remote_connection() {
     		continue;
     	}
 
+    	std::string response_json;
+
     	try {
     		if(!socket.recv(&request)) {
     			logger()->log("recv failed at " + std::string(BOOST_CURRENT_FUNCTION));
@@ -150,9 +155,7 @@ statistics_collector::process_remote_connection() {
     		}
     		else {
 				std::string request_str((char*)request.data(), request.size());
-
-				// parse request
-				logger()->log("STATS REQUESTED: %s", request_str.c_str());
+				response_json = process_request_json(request_str);
     		}
     	}
     	catch (const std::exception& ex) {
@@ -163,18 +166,17 @@ statistics_collector::process_remote_connection() {
     	}
 
     	// see if we're still running
-    	if (!is_running_) {
+    	if (!is_running_ || response_json.empty()) {
     		continue;
     	}
 
     	// send response
 		try {
 			// send response
-			std::string stats_json_str = as_json();
-			size_t data_len = stats_json_str.length();
+			size_t data_len = response_json.length();
 
 			zmq::message_t reply(data_len);
-			memcpy((void*)reply.data(), stats_json_str.c_str(), data_len);
+			memcpy((void*)reply.data(), response_json.c_str(), data_len);
 
 			if(!socket.send(reply)) {
 				logger()->log("sending failed at " + std::string(BOOST_CURRENT_FUNCTION));
@@ -187,6 +189,96 @@ statistics_collector::process_remote_connection() {
 			throw error(error_msg);
 		}
 	}
+}
+
+std::string
+statistics_collector::get_error_json(enum statictics_req_error err) const {
+	Json::Value error_json(Json::objectValue);
+	Json::FastWriter writer;
+
+	switch (err) {
+		case SRE_BAD_JSON_ERROR:
+			error_json["error"] = (int)SRE_BAD_JSON_ERROR;
+			error_json["message"] = "could not parse statistics request json";
+			break;
+
+		case SRE_NO_VERSION_ERROR:
+			error_json["error"] = (int)SRE_NO_VERSION_ERROR;
+			error_json["message"] = "could find version field in statistics request json";
+			break;
+
+		case SRE_UNSUPPORTED_VERSION_ERROR:
+			error_json["error"] = (int)SRE_UNSUPPORTED_VERSION_ERROR;
+			error_json["message"] = "unsupported protocol version in statistics request json";
+			break;
+
+		case SRE_NO_ACTION_ERROR:
+			error_json["error"] = (int)SRE_NO_ACTION_ERROR;
+			error_json["message"] = "could find action field in statistics request json";
+			break;
+
+		case SRE_UNSUPPORTED_ACTION_ERROR:
+			error_json["error"] = (int)SRE_UNSUPPORTED_ACTION_ERROR;
+			error_json["message"] = "unsupported action in statistics request json";
+			break;
+	}
+
+	return writer.write(error_json);
+}
+
+std::string
+statistics_collector::cache_stats_json() {
+	Json::FastWriter writer;
+	Json::Value root;
+	root["1 - max cache size"] = (unsigned int)config()->max_message_cache_size();
+	root["2 - used bytes"] = (unsigned int)used_cache_size_;
+	root["3 - free bytes"] = (unsigned int)(config()->max_message_cache_size() - used_cache_size_);
+
+	return writer.write(root);
+}
+
+std::string
+statistics_collector::process_request_json(const std::string& request_json) {
+	// parse request json
+	Json::Value root;
+	Json::Reader reader;
+	bool parsing_successful = reader.parse(request_json, root);
+
+	if (!parsing_successful) {
+		return get_error_json(SRE_BAD_JSON_ERROR);
+	}
+
+	// check protocol version
+	int version = root.get("version", 1239846245).asUInt();
+
+	if (version != STATISTICS_PROTOCOL_VERSION) {
+		if (version == 1239846245) {
+			return get_error_json(SRE_NO_VERSION_ERROR);
+		}
+		else {
+			return get_error_json(SRE_UNSUPPORTED_VERSION_ERROR);
+		}
+	}
+
+	// check action
+	std::string action = root.get("action", "1239846245").asString();
+	if (action == "1239846245") {
+		return get_error_json(SRE_NO_ACTION_ERROR);
+	}
+
+	if (action != "cache_stats" &&
+		action != "config" &&
+		action != "all_services" &&
+		action != "service") {
+		return get_error_json(SRE_UNSUPPORTED_ACTION_ERROR);
+	}
+
+	// get cache stats
+	if (action == "cache_stats") {
+		return cache_stats_json();
+	}
+
+	return "";
 }
 
 std::string
@@ -203,8 +295,8 @@ statistics_collector::as_json() const {
 		service_info["cocaine app"] = it->second.app_name_;
 		service_info["description"] = it->second.description_;
 		service_info["instance"] = it->second.instance_;
-		service_info["hosts_url_"] = it->second.hosts_url_;
-		service_info["control_port_"] = it->second.hosts_url_;
+		service_info["hosts url"] = it->second.hosts_url_;
+		service_info["control port"] = it->second.hosts_url_;
 
 		Json::Value service;
 		service[it->first] = service_info;
@@ -217,6 +309,16 @@ statistics_collector::as_json() const {
 void
 statistics_collector::enable(bool value) {
 	is_enabled_ = value;
+}
+
+void
+statistics_collector::set_used_cache_size(size_t used_cache_size) {
+	if (!is_enabled_) {
+		return;
+	}
+
+	boost::mutex::scoped_lock lock(mutex_);
+	used_cache_size_ = used_cache_size;
 }
 
 } // namespace lsd

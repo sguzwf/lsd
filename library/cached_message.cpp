@@ -169,40 +169,16 @@ cached_message::is_expired() {
 
 std::string
 cached_message::json() {
-	std::string resulting_json;
-	resulting_json += "{\n";
+	Json::Value envelope(Json::objectValue);
+	Json::FastWriter writer;
 
-	if (policy_.urgent) {
-		resulting_json += "\"urgent\" : true,\n";
-	}
-	else {
-		resulting_json += "\"urgent\" : false,\n";
-	}
+	envelope["urgent"] = policy_.urgent;
+	envelope["mailboxed"] = policy_.mailboxed;
+	envelope["timeout"] = policy_.timeout;
+	envelope["deadline"] = policy_.deadline;
+	envelope["uuid"] = uuid_;
 
-	if (policy_.mailboxed) {
-		resulting_json += "\"mailboxed\" : true,\n";
-	}
-	else {
-		resulting_json += "\"mailboxed\" : false,\n";
-	}
-
-	if (policy_.timeout) {
-		resulting_json += "\"timeout\" : 0.0,\n";
-	}
-	else {
-		resulting_json += "\"timeout\" : 0.0,\n";
-	}
-
-	if (policy_.deadline) {
-		resulting_json += "\"deadline\" : 0.0,\n";
-	}
-	else {
-		resulting_json += "\"deadline\" : 0.0,\n";
-	}
-
-	resulting_json += "\"uuid\" : \"" + uuid_ + "\"\n}";
-
-	return resulting_json;
+	return writer.write(envelope);
 }
 
 } // namespace lsd

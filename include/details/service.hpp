@@ -491,6 +491,7 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 		if (handle_ptr) {
 			handle_ptr->enqueue_message(message);
 			cache_size_ += message->container_size();
+			context()->stats()->set_used_cache_size(cache_size_);
 		}
 		else {
 			std::string error_str = "handle object " + handle_name;
@@ -525,6 +526,7 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 		}
 
 		cache_size_ += message->container_size();
+		context()->stats()->set_used_cache_size(cache_size_);
 	}
 }
 

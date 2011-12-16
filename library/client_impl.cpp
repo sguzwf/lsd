@@ -48,7 +48,6 @@ client_impl::client_impl(const std::string& config_path) :
 
 client_impl::~client_impl() {
 	disconnect();
-	context_.reset();
 	logger()->log("client destroyed.");
 }
 

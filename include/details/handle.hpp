@@ -185,7 +185,9 @@ handle<LSD_T>::dispatch_messages() {
 
 			progress_timer timer;
 			while (true) {
-				if (timer.elapsed().as_double() > 1.000) {
+				//logger()->log("elapsed %.5f", timer.elapsed().as_double());
+				if (timer.elapsed().as_double() > 0.5) {
+					//logger()->log("BREAK");
 					break;
 				}
 			}
@@ -197,9 +199,9 @@ handle<LSD_T>::dispatch_messages() {
 		}
 
 		// check for timed out messages
-		if (is_connected_ && is_running_) {
-			messages_cache()->process_timed_out_messages();
-		}
+		//if (is_connected_ && is_running_) {
+		//	messages_cache()->process_timed_out_messages();
+		//}
 
 		/*
 		// check for message responces

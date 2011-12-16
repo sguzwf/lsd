@@ -12,6 +12,7 @@
 //
 
 #include <cstddef>
+#include <cmath>
 
 #include "details/time_value.hpp"
 
@@ -72,11 +73,11 @@ time_value::seconds() const {
 
 long
 time_value::milliseconds() const {
-	return value_.tv_usec / 1000;
+	return (value_.tv_sec * 1000) + (value_.tv_usec / 1000);
 }
 
 long time_value::microseconds() const {
-	return value_.tv_usec;
+	return (value_.tv_sec * 1000000) + value_.tv_usec;
 }
 
 void
@@ -166,7 +167,7 @@ time_value::distance(const time_value& rhs) const {
 	}
 
 	long long distance = 1000000LL * temp_diff.tv_sec + temp_diff.tv_usec;
-	return distance / 1000000.0;
+	return fabs(distance / 1000000.0);
 }
 
 time_value

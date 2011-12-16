@@ -13,6 +13,7 @@
 
 #include <fstream>
 #include <stdexcept>
+#include <sstream>
 
 #include <boost/current_function.hpp>
 #include <boost/lexical_cast.hpp>
@@ -422,122 +423,130 @@ configuration::service_info_by_name(const std::string& name) const {
 	return false;
 }
 
-std::ostream& operator<<(std::ostream& out, configuration& config) {
-	out << "---------- config path: ----------" << config.path_ << "\n";
+std::string configuration::as_string() const {
+	std::stringstream out;
+
+	out << "---------- config path: ----------" << path_ << "\n";
 
 	// basic
 	out << "basic settings\n";
-	out << "\tconfig version: " << config.version_ << "\n";
-	out << "\tmessage timeout: " << config.message_timeout_ << "\n";
-	out << "\tsocket poll timeout: " << config.socket_poll_timeout_ << "\n";
+	out << "\tconfig version: " << version_ << "\n";
+	out << "\tmessage timeout: " << message_timeout_ << "\n";
+	out << "\tsocket poll timeout: " << socket_poll_timeout_ << "\n";
 	
 	// logger
 	out << "logger\n";
-	if (config.logger_type_ == STDOUT_LOGGER) {
+	if (logger_type_ == STDOUT_LOGGER) {
 		out << "\ttype: STDOUT_LOGGER" << "\n";
 	}
-	else if (config.logger_type_ == FILE_LOGGER) {
+	else if (logger_type_ == FILE_LOGGER) {
 		out << "\ttype: FILE_LOGGER" << "\n";
 	}
-	else if (config.logger_type_ == SYSLOG_LOGGER) {
+	else if (logger_type_ == SYSLOG_LOGGER) {
 		out << "\ttype: SYSLOG_LOGGER" << "\n";
 	}
 	
-	if (config.logger_flags_ == PLOG_NONE) {
+	if (logger_flags_ == PLOG_NONE) {
 		out << "\tflags: PLOG_NONE" << "\n";
 	}
-	else if (config.logger_flags_ == PLOG_ALL) {
+	else if (logger_flags_ == PLOG_ALL) {
 		out << "\tflags: PLOG_ALL" << "\n";
 	}
 	else {
 		out << "\tflags: ";
 		
-		if ((config.logger_flags_ & PLOG_INFO) == PLOG_INFO) {
+		if ((logger_flags_ & PLOG_INFO) == PLOG_INFO) {
 			out << "PLOG_INFO ";
 		}
 		
-		if ((config.logger_flags_ & PLOG_DEBUG) == PLOG_DEBUG) {
+		if ((logger_flags_ & PLOG_DEBUG) == PLOG_DEBUG) {
 			out << "PLOG_DEBUG ";
 		}
 		
-		if ((config.logger_flags_ & PLOG_WARNING) == PLOG_WARNING) {
+		if ((logger_flags_ & PLOG_WARNING) == PLOG_WARNING) {
 			out << "PLOG_WARNING ";
 		}
 		
-		if ((config.logger_flags_ & PLOG_ERROR) == PLOG_ERROR) {
+		if ((logger_flags_ & PLOG_ERROR) == PLOG_ERROR) {
 			out << "PLOG_ERROR ";
 		}
 
-		if ((config.logger_flags_ & PLOG_MSG_TYPES) == PLOG_MSG_TYPES) {
+		if ((logger_flags_ & PLOG_MSG_TYPES) == PLOG_MSG_TYPES) {
 			out << "PLOG_MSG_TYPES ";
 		}
 
 		out << "\n";
 	}
 
-	out << "\tfile path: " << config.logger_file_path_ << "\n";
- 	out << "\tsyslog name: " << config.logger_syslog_name_ << "\n\n";
+	out << "\tfile path: " << logger_file_path_ << "\n";
+ 	out << "\tsyslog name: " << logger_syslog_name_ << "\n\n";
 
 
  	// message cache
  	out << "message cache\n";
- 	out << "\tmax ram limit: " << config.max_message_cache_size_ / 1048576 << " Mb\n";
+ 	out << "\tmax ram limit: " << max_message_cache_size_ / 1048576 << " Mb\n";
 
- 	if (config.message_cache_type_ == RAM_ONLY) {
+ 	if (message_cache_type_ == RAM_ONLY) {
  		out << "\ttype: RAM_ONLY\n\n";
  	}
- 	else if (config.message_cache_type_ == PERSISTANT) {
+ 	else if (message_cache_type_ == PERSISTANT) {
  		out << "\ttype: PERSISTANT\n\n";
  	}
 
  	// persistant storage
  	out << "persistant storage\n";
-	out << "\teblob path: " << config.eblob_path_ << "\n";
-	out << "\teblob log path: " << config.eblob_log_path_ << "\n";
-	out << "\teblob log flags: " << config.eblob_log_flags_ << "\n";
- 	out << "\teblob sync interval: " << config.eblob_sync_interval_ << "\n\n";
+	out << "\teblob path: " << eblob_path_ << "\n";
+	out << "\teblob log path: " << eblob_log_path_ << "\n";
+	out << "\teblob log flags: " << eblob_log_flags_ << "\n";
+ 	out << "\teblob sync interval: " << eblob_sync_interval_ << "\n\n";
 
  	// autodiscovery
  	out << "autodiscovery\n";
-	if (config.autodiscovery_type_ == AT_MULTICAST) {
+	if (autodiscovery_type_ == AT_MULTICAST) {
 		out << "\ttype: MULTICAST" << "\n";
 	}
-	else if (config.autodiscovery_type_ == AT_HTTP) {
+	else if (autodiscovery_type_ == AT_HTTP) {
 		out << "\ttype: HTTP" << "\n";
 	}
 
-	out << "\tmulticast ip: " << config.multicast_ip_ << "\n";
-	out << "\tmulticast port: " << config.multicast_port_ << "\n\n";
+	out << "\tmulticast ip: " << multicast_ip_ << "\n";
+	out << "\tmulticast port: " << multicast_port_ << "\n\n";
 
 	// statistics
 	out << "statistics\n";
-	if (config.is_statistics_enabled_ == true) {
+	if (is_statistics_enabled_ == true) {
 		out << "\tenabled: true" << "\n";
 	}
 	else {
 		out << "\tenabled: false" << "\n";
 	}
 
-	if (config.is_remote_statistics_enabled_ == true) {
+	if (is_remote_statistics_enabled_ == true) {
 		out << "\tremote enabled: true" << "\n";
 	}
 	else {
 		out << "\tremote enabled: false" << "\n";
 	}
 
-	out << "\tremote port: " << config.remote_statistics_port_ << "\n\n";
+	out << "\tremote port: " << remote_statistics_port_ << "\n\n";
 
 	// services
 	out << "services: ";
-	std::map<std::string, service_info_t>& sl = config.services_list_;
+	const std::map<std::string, service_info_t>& sl = services_list_;
 	
-	for (std::map<std::string, service_info_t>::iterator it = sl.begin(); it != sl.end(); ++it) {
+	std::map<std::string, service_info_t>::const_iterator it = sl.begin();
+	for (; it != sl.end(); ++it) {
 		out << "\n\tname: " << it->second.name_ << "\n";
 		out << "\tdescription: " << it->second.description_ << "\n";
 		out << "\thosts url: " << it->second.hosts_url_ << "\n";
 		out << "\tcontrol port: " << it->second.control_port_ << "\n";
 	}
 	
+	return out.str();
+}
+
+std::ostream& operator<<(std::ostream& out, configuration& config) {
+	out << config.as_string();
 	return out;
 }
 

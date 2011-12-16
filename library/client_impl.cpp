@@ -48,6 +48,7 @@ client_impl::client_impl(const std::string& config_path) :
 
 client_impl::~client_impl() {
 	disconnect();
+	context_.reset();
 	logger()->log("client destroyed.");
 }
 
@@ -89,14 +90,16 @@ client_impl::disconnect() {
 		heartbeats_collector_->stop();
 	}
 	else {
-
+		std::string error_msg = "empty heartbeats collector object at ";
+		error_msg += std::string(BOOST_CURRENT_FUNCTION);
+		throw error(error_msg);
 	}
 
 	// stop services
-	services_map_t::iterator it = services_.begin();
-	for (; it != services_.end(); ++it) {
+	//services_map_t::iterator it = services_.begin();
+	//for (; it != services_.end(); ++it) {
 		//if(it->second)
-	}
+	//}
 }
 
 void

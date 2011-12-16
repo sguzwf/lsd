@@ -29,7 +29,7 @@ typedef boost::mpl::list<int, long, unsigned char> test_types;
 BOOST_AUTO_TEST_SUITE(test_cached_read);
 
 void spawn_client() {
-	std::string config_path = "config.json";
+	std::string config_path = "config_example.json";
 	int add_messages_count = 300;
 
 	lsd::client client(config_path);

@@ -24,9 +24,6 @@ context::context(const std::string& config_path) {
 
 	config_.reset(new configuration(config_path));
 
-	std::cout << *config_ << std::endl;
-	exit(0);
-
 	// create logger
 	switch (config_->logger_type()) {
 		case STDOUT_LOGGER:
@@ -48,14 +45,19 @@ context::context(const std::string& config_path) {
 			break;
 	}
 	
-	logger_->log("loaded config: %s", config_->config_path().c_str());
+	logger()->log("loaded config: %s", config()->config_path().c_str());
+	//logger()->log(config()->as_string());
 	
 	// create zmq context
 	zmq_context_.reset(new zmq::context_t(1));
+
+	// create statistics collector
+	stats_.reset(new statistics_collector(config_, zmq_context_, logger_));
 }
 
 context::~context() {
-
+	stats_.reset();
+	zmq_context_.reset();
 }
 
 boost::shared_ptr<configuration>
@@ -72,6 +74,12 @@ context::logger() {
 boost::shared_ptr<zmq::context_t>
 context::zmq_context() {
 	return zmq_context_;
+}
+
+boost::shared_ptr<statistics_collector>
+context::stats() {
+	boost::mutex::scoped_lock lock(mutex_);
+	return stats_;
 }
 
 } // namespace lsd

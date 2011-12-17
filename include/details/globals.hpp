@@ -23,9 +23,6 @@
 
 namespace lsd {
 
-// main types definition
-typedef lsd_types LT;
-
 // host info
 typedef host_info<LT> host_info_t;
 

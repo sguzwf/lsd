@@ -227,12 +227,69 @@ statistics_collector::get_error_json(enum statictics_req_error err) const {
 }
 
 std::string
-statistics_collector::cache_stats_json() {
+statistics_collector::cache_stats_json() const {
 	Json::FastWriter writer;
 	Json::Value root;
 	root["1 - max cache size"] = (unsigned int)config()->max_message_cache_size();
 	root["2 - used bytes"] = (unsigned int)used_cache_size_;
 	root["3 - free bytes"] = (unsigned int)(config()->max_message_cache_size() - used_cache_size_);
+
+	return writer.write(root);
+}
+
+std::string
+statistics_collector::all_services_json() {
+	Json::FastWriter writer;
+	Json::Value root;
+
+	// cache info
+	Json::Value cache_info;
+	cache_info["1 - max cache size"] = (unsigned int)config()->max_message_cache_size();
+	cache_info["2 - used bytes"] = (unsigned int)used_cache_size_;
+	cache_info["3 - free bytes"] = (unsigned int)(config()->max_message_cache_size() - used_cache_size_);
+	root["1 - cache info"] = cache_info;
+
+	// queues tatals info
+	Json::Value messages_statistics;
+
+	size_t total_queued_messages = 0;
+	{
+		boost::mutex::scoped_lock lock(mutex_);
+		service_stats_t::iterator it = services_queued_.begin();
+		for (; it != services_queued_.end(); ++it) {
+			total_queued_messages += it->second;
+		}
+	}
+	messages_statistics["1 - queued"] = (int)total_queued_messages;
+
+	size_t total_unhandled_messages = 0;
+	{
+		//boost::mutex::scoped_lock lock(mutex_);
+		//service_stats_t::iterator it = services_unhandled_.begin();
+		//for (; it != services_unhandled_.end(); ++it) {
+		//	total_unhandled_messages += it->second;
+		//}
+	}
+	messages_statistics["2 - unhandled"] = (int)total_unhandled_messages;
+	root["2 - messages statistics"] = messages_statistics;
+
+	// services
+	typedef configuration::services_list_t slist_t;
+	const slist_t& services = config()->services_list();
+
+	slist_t::const_iterator it = services.begin();
+	for (; it != services.end(); ++it) {
+		Json::Value service_info;
+		service_info["1 - cocaine app"] = it->second.app_name_;
+		service_info["2 - instance"] = it->second.instance_;
+		service_info["3 - description"] = it->second.description_;
+		service_info["4 - control port"] = it->second.hosts_url_;
+		service_info["5 - hosts url"] = it->second.hosts_url_;
+
+		Json::Value service;
+		service[it->first] = service_info;
+		root["3 - services"] = service;
+	}
 
 	return writer.write(root);
 }
@@ -283,6 +340,11 @@ statistics_collector::process_request_json(const std::string& request_json) {
 		return config()->as_json();
 	}
 
+	// get all services data
+	if (action == "all_services") {
+		return all_services_json();
+	}
+
 	return "";
 }
 
@@ -316,6 +378,28 @@ statistics_collector::enable(bool value) {
 	is_enabled_ = value;
 }
 
+/*
+void
+statistics_collector::set_service_stats(const std::string& service, const std::string& handle, size_t msg_queue_size) {
+	if (!is_enabled_) {
+		return;
+	}
+
+	boost::mutex::scoped_lock lock(mutex_);
+	service_stats_t::iterator it = services_stats_.find(std::make_pair(service, handle));
+
+	if (msg_queue_size == 0) {
+		if (it != services_stats_.end()) {
+			services_stats_.erase(it);
+		}
+
+		return;
+	}
+
+	services_stats_[std::make_pair(service, handle)] = msg_queue_size;
+}
+*/
+
 void
 statistics_collector::set_used_cache_size(size_t used_cache_size) {
 	if (!is_enabled_) {
@@ -324,6 +408,31 @@ statistics_collector::set_used_cache_size(size_t used_cache_size) {
 
 	boost::mutex::scoped_lock lock(mutex_);
 	used_cache_size_ = used_cache_size;
+}
+
+void
+statistics_collector::set_queued_messages_count(const service_stats_t& services_stats) {
+	if (!is_enabled_) {
+		return;
+	}
+
+	boost::mutex::scoped_lock lock(mutex_);
+	services_queued_ = services_stats;
+}
+
+void
+statistics_collector::set_service_unhandled_stats(const service_stats_t& services_unhandled) {
+	logger()->log("UPDATE");
+	if (!is_enabled_) {
+		return;
+	}
+
+	//boost::mutex::scoped_lock lock(mutex_);
+	service_stats_t::const_iterator it = services_unhandled.begin();
+	for (; it != services_unhandled.end(); ++it) {
+		//services_unhandled_[it->first] = it->second;
+		logger()->log("count: %d", it->second);
+	}
 }
 
 } // namespace lsd

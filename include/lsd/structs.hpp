@@ -40,7 +40,13 @@ static const unsigned short DEFAULT_MULTICAST_PORT = 5556;
 static const unsigned short DEFAULT_STATISTICS_PORT = 3333;
 static const size_t DEFAULT_MAX_MESSAGE_CACHE_SIZE = 512; // megabytes
 
+struct lsd_types {
+	typedef boost::uint32_t ip_addr;
+	typedef boost::uint16_t port;
+};
 
+// main types definition
+typedef lsd_types LT;
 
 enum logger_type {
 	STDOUT_LOGGER = 1,
@@ -158,12 +164,10 @@ struct message_policy {
     int max_timeout_retries;
 };
 
-struct lsd_types {
-	typedef boost::uint32_t ip_addr;
-	typedef boost::uint16_t port;
+struct msg_queue_stats {
+	size_t sent_messages_count;
+	size_t queued_messages_count;
 };
-
-typedef lsd_types LT;
 
 } // namespace lsd
 

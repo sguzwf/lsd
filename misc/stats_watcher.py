@@ -11,9 +11,10 @@ def main():
     request.connect('tcp://localhost:3333')
 
     # Statistics
+    # cache_stats / config / all_services
     request.send_json({
     	'version' : 1,
-        'action': 'config'
+        'action': 'all_services'
     })
 
     pprint(request.recv_json())

@@ -83,6 +83,10 @@ private:
 private:
 	size_t messages_cache_size_;
 
+	// statistics of messages queued to handles
+	typedef std::map<std::pair<std::string, std::string>, size_t> service_stats_t;
+	service_stats_t queued_messages_stats_;
+
 	// main lsd context
 	boost::shared_ptr<lsd::context> context_;
 

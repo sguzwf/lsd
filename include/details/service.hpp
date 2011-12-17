@@ -100,6 +100,7 @@ private:
 										 const handles_info_list_t& handles);
 
 	void responce_callback(cached_response_prt_t response);
+	void update_statistics();
 
 	boost::shared_ptr<base_logger> logger();
 	boost::shared_ptr<configuration> config();
@@ -219,6 +220,36 @@ service<LSD_T>::responce_callback(cached_response_prt_t response) {
 
 	// add responce to queue
 	handle_resp_queue->push_back(response);
+}
+
+template <typename LSD_T> void
+service<LSD_T>::update_statistics() {
+	unhandled_messages_map_t::iterator it = unhandled_messages_.begin();
+
+	// statistics of messages queued to handles
+	typedef std::map<std::pair<std::string, std::string>, size_t> service_stats_t;
+	service_stats_t unhandled_messages_stats_;
+	unhandled_messages_stats_.clear();
+
+	for (; it != unhandled_messages_.end(); ++it) {
+		typedef std::pair<std::string, std::string> key_type;
+
+		// service name, handle name
+		key_type key = std::make_pair(info_.name_, it->first);
+
+		if (it->second) {
+			unhandled_messages_stats_[key] = it->second->size();
+		}
+		else {
+			std::string error_str = "found empty unhandled messages queue object!";
+			error_str += " service: " + info_.name_ + " handle: " + it->first;
+			error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
+			throw error(error_str);
+		}
+	}
+
+	// post collected statistics to collector obj
+	context()->stats()->set_service_unhandled_stats(unhandled_messages_stats_);
 }
 
 template <typename LSD_T> void
@@ -411,6 +442,8 @@ service<LSD_T>::remove_outstanding_handles(const handles_info_list_t& handles) {
 
 		handles_.erase(it);
 	}
+
+	update_statistics();
 }
 
 template <typename LSD_T> void
@@ -468,6 +501,8 @@ service<LSD_T>::create_new_handles(const handles_info_list_t& handles, const hos
 		handles_[handles[i].name_]->connect(hosts);
 		lock.lock();
 	}
+
+	update_statistics();
 }
 
 template <typename LSD_T> void
@@ -505,14 +540,15 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 		unhandled_messages_map_t::iterator it = unhandled_messages_.find(handle_name);
 
 		// check for existing messages queue for handle
+		messages_deque_ptr_t queue_ptr;
+
 		if (it == unhandled_messages_.end()) {
-			messages_deque_ptr_t queue_ptr;
 			queue_ptr.reset(new cached_messages_deque_t);
 			queue_ptr->push_back(message);
 			unhandled_messages_[handle_name] = queue_ptr;
 		}
 		else {
-			messages_deque_ptr_t queue_ptr = it->second;
+			queue_ptr = it->second;
 
 			// validate msg queue
 			if (!queue_ptr) {
@@ -524,6 +560,8 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 
 			queue_ptr->push_back(message);
 		}
+
+		update_statistics();
 
 		cache_size_ += message->container_size();
 		context()->stats()->set_used_cache_size(cache_size_);

@@ -52,7 +52,7 @@ context::context(const std::string& config_path) {
 	zmq_context_.reset(new zmq::context_t(1));
 
 	// create statistics collector
-	stats_.reset(new statistics_collector(config_, zmq_context_, logger_));
+	stats_.reset(new statistics_collector(config_, zmq_context_, logger()));
 }
 
 context::~context() {

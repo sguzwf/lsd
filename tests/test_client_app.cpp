@@ -31,6 +31,11 @@ void create_client(int add_messages_count) {
 	path.service_name = "karma-engine-testing";
 	path.handle_name = "event";
 
+	// create message path
+	lsd::message_path path2;
+	path2.service_name = "huita";
+	path2.handle_name = "crazy_handle";
+
 	// create message policy
 	lsd::message_policy policy;
 	policy.deadline = 2.0;
@@ -48,6 +53,16 @@ void create_client(int add_messages_count) {
 	for (int i = 0; i < add_messages_count; ++i) {
 		std::string uuid1 = c.send_message(buffer.data(), buffer.size(), path, policy);
 	}
+
+	//for (int i = 0; i < add_messages_count; ++i) {
+	//	std::string uuid1 = c.send_message(buffer.data(), buffer.size(), path2, policy);
+	//}
+
+	//sleep(15);
+
+	//for (int i = 0; i < add_messages_count; ++i) {
+	//	std::string uuid1 = c.send_message(buffer.data(), buffer.size(), path, policy);
+	//}
 
 	sleep(300);
 }

@@ -227,15 +227,36 @@ client_impl::send_message(const std::string& data,
 	return send_message(data.c_str(), data.length(), path, policy);
 }
 
-void
-client_impl::set_response_callback(boost::function<void(const std::string&, void* data, size_t size)> callback)
+int
+client_impl::set_response_callback(boost::function<void(const response&, const response_info&)> callback,
+						   	   	   const std::string& service_name,
+						   	   	   const std::string& handle_name)
 {
-	response_callback_ = callback;
+	// check for services
+	services_map_t::iterator it = services_.find(service_name);
+	if (it == services_.end()) {
+		return UNKNOWN_SERVICE_ERROR;
+	}
+
+	if (!callback) {
+		throw error("callback function is empty at " + std::string(BOOST_CURRENT_FUNCTION));
+	}
+
+	if (!it->second) {
+		throw error("service object is empty at " + std::string(BOOST_CURRENT_FUNCTION));
+	}
+
+	// assign to service
+	if (!it->second->register_responder_callback(callback, handle_name)) {
+		return CALLBACK_EXISTS_ERROR;
+	}
+
+	return 0;
 }
 
 boost::shared_ptr<context>
 client_impl::context() {
-	if (!context_.get()) {
+	if (!context_) {
 		throw error("lsd context object is empty at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 

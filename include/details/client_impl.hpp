@@ -66,7 +66,10 @@ public:
 							 const message_path& path,
 							 const message_policy& policy);
 
-	void set_response_callback(boost::function<void(const std::string&, void* data, size_t size)> callback);
+	int set_response_callback(boost::function<void(const response&, const response_info&)> callback,
+							   const std::string& service_name,
+							   const std::string& handle_name);
+
 	size_t messages_cache_size() const;
 
 	boost::shared_ptr<base_logger> logger();

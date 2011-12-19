@@ -155,7 +155,7 @@ handle<LSD_T>::handle(const handle_info<LSD_T>& info,
 	zmq_control_socket_->setsockopt(ZMQ_LINGER, &timeout, sizeof(timeout));
 	zmq_control_socket_->bind(conn_str.c_str());
 
-	// run main thread
+	// run message dispatch thread
 	is_running_ = true;
 	thread_ = boost::thread(&handle<LSD_T>::dispatch_messages, this);
 
@@ -165,9 +165,6 @@ handle<LSD_T>::handle(const handle_info<LSD_T>& info,
 
 template <typename LSD_T>
 handle<LSD_T>::~handle() {
-	get_statistics();
-	update_statistics();
-
 	kill();
 
 	zmq_control_socket_->close();
@@ -201,15 +198,6 @@ handle<LSD_T>::dispatch_messages() {
 		// process incoming control messages
 		if (control_message > 0) {
 			dispatch_control_messages(control_message, main_socket);
-
-			progress_timer timer;
-			while (true) {
-				//logger()->log("elapsed %.5f", timer.elapsed().as_double());
-				if (timer.elapsed().as_double() > 0.5) {
-					//logger()->log("BREAK");
-					break;
-				}
-			}
 		}
 	
 		// send new message if any
@@ -279,7 +267,7 @@ handle<LSD_T>::establish_control_conection(socket_ptr_t& control_socket) {
 template <typename LSD_T> void
 handle<LSD_T>::enqueue_response(cached_response_prt_t response) {
 	if (response_callback_) {
-		//response_callback_(response);
+		response_callback_(response);
 	}
 }
 
@@ -555,11 +543,12 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 			// just send message again
 			if (error_code == MESSAGE_QUEUE_IS_FULL) {
 				if (fetched_message) {
+					//messages_cache()->remove_message_from_cache(uuid);
 					messages_cache()->move_sent_message_to_new_front(uuid);
 					++statistics_.resent_messages;
 					update_statistics();
+					continue;
 				}
-				break;
 			}
 
 			if (error_code != 0) {
@@ -568,11 +557,10 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 				// if we could not get message from cache, we assume, lsd has already processed it
 				// otherwise — make response!
 				if (fetched_message) {
-					
 					// create response object
 					cached_response_prt_t new_response;
 					new_response.reset(new cached_response(uuid, sent_msg->path(), error_code, error_message));
-					
+
 					// remove message from cache
 					messages_cache()->remove_message_from_cache(uuid);
 					enqueue_response(new_response);
@@ -591,7 +579,7 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 					update_statistics();
 				}
 
-				break;
+				continue;
 			}
 
 			// receive data
@@ -626,14 +614,14 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 			else {
 				//logger()->log(PLOG_DEBUG, "responce completed");
 				messages_cache()->remove_message_from_cache(uuid);
-				
+
 				if (fetched_message) {
 					++statistics_.normal_responces;
 					++statistics_.all_responces;
 					update_statistics();
 
 					cached_response_prt_t new_response;
-					new_response.reset(new cached_response(uuid, sent_msg->path(), reply.data(), reply.size()));
+					new_response.reset(new cached_response(uuid, sent_msg->path(), NULL, 0));
 					new_response->set_error(MESSAGE_CHOKE, "");
 					enqueue_response(new_response);
 				}
@@ -728,9 +716,6 @@ handle<LSD_T>::info() const {
 template <typename LSD_T> void
 handle<LSD_T>::kill() {
 	logger()->log(PLOG_DEBUG, "kill");
-
-	get_statistics();
-	update_statistics();
 
 	if (!is_running_) {
 		return;
@@ -834,9 +819,6 @@ template <typename LSD_T> void
 handle<LSD_T>::disconnect() {
 	boost::mutex::scoped_lock lock(mutex_);
 	logger()->log(PLOG_DEBUG, "disconnect");
-
-	get_statistics();
-	update_statistics();
 	
 	if (!is_running_) {
 		return;

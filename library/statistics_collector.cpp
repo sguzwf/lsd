@@ -505,6 +505,7 @@ statistics_collector::get_handle_stats(const std::string& service,
 	}
 
 	stats = it->second;
+	return true;
 }
 
 } // namespace lsd

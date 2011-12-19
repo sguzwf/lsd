@@ -164,12 +164,12 @@ public:
 		}
 		catch (...) {
 			file_.close();
-			throw error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
+			throw error(error_msg + " at: " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
 		if (!file_.is_open()) {
 			file_.close();
-			throw error(error_msg + "at: " + std::string(BOOST_CURRENT_FUNCTION));
+			throw error(error_msg + " at: " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
 		file_ << first_message_;

@@ -171,7 +171,14 @@ http_heartbeats_collector::get_metainfo_from_host(const service_info_t& s_info,
 
 	// poll for responce
 	progress_timer timer;
-	int res = zmq_poll(poll_items, 1, DEFAULT_SOCKET_POLL_TIMEOUT);
+
+	int res = 0;
+	while (res <= 0) {
+		res = zmq_poll(poll_items, 1, DEFAULT_SOCKET_POLL_TIMEOUT);
+		if (timer.elapsed().as_double() > 0.5) {
+			break;
+		}
+	}
 
 	if (res <= 0) {
 		return false;

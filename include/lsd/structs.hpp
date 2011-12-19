@@ -48,6 +48,11 @@ struct lsd_types {
 // main types definition
 typedef lsd_types LT;
 
+enum callback_error {
+	UNKNOWN_SERVICE_ERROR = 1,
+	CALLBACK_EXISTS_ERROR = 2
+};
+
 enum response_error {
 	MESSAGE_CHUNK = 1,
 	MESSAGE_CHOKE = 2,
@@ -231,6 +236,21 @@ struct service_stats {
 
 	// <handle name, queue_size>
 	std::map<std::string, size_t> unhandled_messages;
+};
+
+struct response {
+	response() : data(NULL), size(0) {};
+	std::string uuid;
+	void* data;
+	size_t size;
+};
+
+struct response_info {
+	response_info() : error(0) {};
+	std::string service;
+	std::string handle;
+	int error;
+	std::string error_msg;
 };
 
 } // namespace lsd

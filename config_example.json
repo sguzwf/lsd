@@ -9,7 +9,7 @@
 		{
 			"type" : "STDOUT_LOGGER",
 			"flags" : "PLOG_MSG_TIME | PLOG_INFO | PLOG_DEBUG | PLOG_ERROR | PLOG_MSG_TYPES",
-			"file" : "/var/log/lsd.log",
+			"file" : "/tmp/lsd.log",
 			"syslog_name" : "lsd_log"
 		},
 		

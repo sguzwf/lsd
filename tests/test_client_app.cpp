@@ -12,7 +12,9 @@
 //
 
 #include <iostream>
+#include <sstream>
 #include <boost/program_options.hpp>
+#include <boost/bind.hpp>
 
 #include <msgpack.hpp>
 
@@ -23,9 +25,27 @@ namespace po = boost::program_options;
 
 std::string config_path = "config_example.json";
 
+void response_callback(const lsd::response& response, const lsd::response_info& info) {
+	if (info.error != lsd::MESSAGE_CHOKE) {
+		std::cout << "resp (CHUNK) uuid: " << response.uuid << std::endl;
+		msgpack::unpacked msg;
+		msgpack::unpack(&msg, (const char*)response.data, response.size);
+
+		msgpack::object obj = msg.get();
+		std::stringstream stream;
+
+		std::cout << "resp data: " << obj << std::endl;
+	}
+	else {
+		std::cout << "resp (CHOKE) uuid: " << response.uuid << std::endl;
+		std::cout << "resp done!" << std::endl;
+	}
+}
+
 void create_client(int add_messages_count) {
 	lsd::client c(config_path);
 	c.connect();
+	c.set_response_callback(boost::bind(&response_callback, _1, _2), "karma-engine-testing", "event");
 
 	sleep(3);
 
@@ -53,9 +73,10 @@ void create_client(int add_messages_count) {
 	// send messages
 	for (int i = 0; i < add_messages_count; ++i) {
 		std::string uuid1 = c.send_message(buffer.data(), buffer.size(), path, policy);
+		std::cout << "mesg uuid: " << uuid1 << std::endl;
 	}
 
-	sleep(60);
+	sleep(600);
 }
 
 int

@@ -24,7 +24,7 @@
 
 #include <boost/shared_ptr.hpp>
 #include <boost/utility.hpp>
-#include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 #include <boost/function.hpp>
 
 #include "lsd/structs.hpp"
@@ -72,14 +72,22 @@ public:
 	// map <handle_name/handle's responces deque>
 	typedef std::map<std::string, responces_deque_ptr_t> responces_map_t;
 
+	// registered response callback
+	typedef boost::function<void(const response&, const response_info&)> registered_callback_t;
+	typedef std::map<std::string, registered_callback_t> registered_callbacks_map_t;
+
 public:
 	service(const service_info<LSD_T>& info, boost::shared_ptr<lsd::context> context);
+	virtual ~service();
 
 	void refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 								   const std::vector<handle_info<LSD_T> >& handles);
 
 	void send_message(cached_message_prt_t message);
 	size_t cache_size() const;
+
+	bool register_responder_callback(registered_callback_t callback,
+									 const std::string& handle_name);
 
 public:
 	template<typename T> friend std::ostream& operator << (std::ostream& out, const service<T>& s);
@@ -99,7 +107,8 @@ private:
 	void log_refreshed_hosts_and_handles(const hosts_info_list_t& hosts,
 										 const handles_info_list_t& handles);
 
-	void responce_callback(cached_response_prt_t response);
+	void enqueue_responce_callback(cached_response_prt_t response);
+	void dispatch_responces();
 
 	// send collected statistics to global stats collector
 	void update_statistics();
@@ -133,17 +142,76 @@ private:
 	// statistics
 	service_stats stats_;
 
-	// synchronization
+	boost::thread thread_;
 	boost::mutex mutex_;
+	volatile bool is_running_;
+
+	// responses callbacks
+	registered_callbacks_map_t responses_callbacks_map_;
 };
 
 template <typename LSD_T>
 service<LSD_T>::service(const service_info<LSD_T>& info, boost::shared_ptr<lsd::context> context) :
 	info_(info),
 	context_(context),
-	cache_size_(0)
+	cache_size_(0),
+	is_running_(false)
 {
 	update_statistics();
+
+	// run response dispatch thread
+	is_running_ = true;
+	thread_ = boost::thread(&service<LSD_T>::dispatch_responces, this);
+}
+
+template <typename LSD_T>
+service<LSD_T>::~service() {
+	is_running_ = false;
+	thread_.join();
+}
+
+template <typename LSD_T> void
+service<LSD_T>::dispatch_responces() {
+	while (is_running_) {
+		boost::mutex::scoped_lock lock(mutex_);
+
+		// go through all callbacks
+		registered_callbacks_map_t::iterator it = responses_callbacks_map_.begin();
+		for (; it != responses_callbacks_map_.end(); ++it) {
+
+			// get responces queue for registered callback
+			responces_map_t::iterator qit = received_responces_.find(it->first);
+			if (qit != received_responces_.end()) {
+
+				// get first responce from queue
+				responces_deque_ptr_t handle_resp_queue = qit->second;
+
+				if (!handle_resp_queue->empty()) {
+					cached_response_prt_t resp_ptr = handle_resp_queue->front();
+					registered_callback_t callback = it->second;
+
+					// create simplified response
+					response resp;
+					resp.uuid = resp_ptr->uuid();
+					resp.data = resp_ptr->data().data();
+					resp.size = resp_ptr->data().size();
+
+					response_info resp_info;
+					resp_info.error = resp_ptr->error_code();
+					resp_info.error_msg = resp_ptr->error_message();
+					resp_info.service = resp_ptr->path().service_name;
+					resp_info.handle = resp_ptr->path().handle_name;
+
+					// invoke callback for given handle and response
+					callback(resp, resp_info);
+
+					// remove processed response
+					handle_resp_queue->pop_front();
+				}
+			}
+		}
+
+	}
 }
 
 template <typename LSD_T> boost::shared_ptr<lsd::context>
@@ -189,8 +257,24 @@ service<LSD_T>::log_refreshed_hosts_and_handles(const hosts_info_list_t& hosts,
 	}
 }
 
+template <typename LSD_T> bool
+service<LSD_T>::register_responder_callback(boost::function<void(const response&, const response_info&)> callback,
+											const std::string& handle_name)
+{
+	boost::mutex::scoped_lock lock(mutex_);
+
+	registered_callbacks_map_t::iterator it = responses_callbacks_map_.find(handle_name);
+
+	// check whether such callback is already registered
+	if (it != responses_callbacks_map_.end()) {
+		return false;
+	}
+
+	responses_callbacks_map_[handle_name] = callback;
+}
+
 template <typename LSD_T> void
-service<LSD_T>::responce_callback(cached_response_prt_t response) {
+service<LSD_T>::enqueue_responce_callback(cached_response_prt_t response) {
 
 	// validate response
 	if (!response) {
@@ -200,11 +284,21 @@ service<LSD_T>::responce_callback(cached_response_prt_t response) {
 		throw error(error_str);
 	}
 
-
 	boost::mutex::scoped_lock lock(mutex_);
 	const message_path& path = response->path();
-	responces_map_t::iterator it = received_responces_.find(path.handle_name);
 
+	// see whether there exists registered callback for response handle
+	registered_callbacks_map_t::iterator callback_it = responses_callbacks_map_.find(path.handle_name);
+
+	// check whether such callback is already registered
+	if (callback_it == responses_callbacks_map_.end()) {
+
+		// no callback -- drop response
+		return;
+	}
+
+	// get responces queue for response handle
+	responces_map_t::iterator it = received_responces_.find(path.handle_name);
 	responces_deque_ptr_t handle_resp_queue;
 
 	// if no queue for handle's responces exists, create one
@@ -277,7 +371,7 @@ service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 {
 	boost::mutex::scoped_lock lock(mutex_);
 
-	log_refreshed_hosts_and_handles(hosts, handles);
+	//log_refreshed_hosts_and_handles(hosts, handles);
 	//return;
 
 	// refresh hosts
@@ -486,7 +580,7 @@ service<LSD_T>::create_new_handles(const handles_info_list_t& handles, const hos
 
 		// set responce callback
 		typedef typename handle<LSD_T>::responce_callback_t resp_callback;
-		resp_callback callback = boost::bind(&service<LSD_T>::responce_callback, this, _1);
+		resp_callback callback = boost::bind(&service<LSD_T>::enqueue_responce_callback, this, _1);
 		handle_ptr->set_responce_callback(callback);
 
 		// find corresponding unhandled msgs queue

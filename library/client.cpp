@@ -86,10 +86,21 @@ client::send_message(const std::string& data,
 	return get_impl()->send_message(data, path, policy);
 }
 
-void
-client::set_response_callback(boost::function<void(const std::string&, void* data, size_t size)> callback) {
-	get_impl()->set_response_callback(callback);
+int
+client::set_response_callback(boost::function<void(const response&, const response_info&)> callback,
+						   	  const std::string& service_name,
+						   	  const std::string& handle_name)
+{
+	return get_impl()->set_response_callback(callback, service_name, handle_name);
 }
+
+int
+client::set_response_callback(boost::function<void(const response&, const response_info&)> callback,
+							  const message_path& path)
+{
+	return set_response_callback(callback, path.service_name, path.handle_name);
+}
+
 
 inline boost::shared_ptr<client_impl>
 client::get_impl() {

@@ -277,7 +277,7 @@ service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 {
 	boost::mutex::scoped_lock lock(mutex_);
 
-	//log_refreshed_hosts_and_handles(hosts, handles);
+	log_refreshed_hosts_and_handles(hosts, handles);
 	//return;
 
 	// refresh hosts
@@ -394,6 +394,8 @@ service<LSD_T>::remove_outstanding_handles(const handles_info_list_t& handles) {
 	if (handles.empty()) {
 		return;
 	}
+
+	logger()->log("remove_outstanding_handles");
 
 	// destroy handles
 	for (size_t i = 0; i < handles.size(); ++i) {

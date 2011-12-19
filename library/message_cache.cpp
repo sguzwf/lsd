@@ -91,7 +91,7 @@ message_cache::append_message_queue(message_queue_ptr_t queue) {
 	new_messages_->insert(new_messages_->end(), queue->begin(), queue->end());
 }
 
-cached_message&
+boost::shared_ptr<cached_message>
 message_cache::get_new_message() {
 	boost::mutex::scoped_lock lock(mutex_);
 
@@ -102,7 +102,7 @@ message_cache::get_new_message() {
 		throw error(error_str);
 	}
 
-	return *(new_messages_->front());
+	return new_messages_->front();
 }
 
 size_t
@@ -117,7 +117,7 @@ message_cache::sent_messages_count() {
 	return sent_messages_.size();
 }
 
-cached_message&
+boost::shared_ptr<cached_message>
 message_cache::get_sent_message(const std::string& uuid) {
 	boost::mutex::scoped_lock lock(mutex_);
 	messages_index_t::const_iterator it = sent_messages_.find(uuid);
@@ -132,7 +132,7 @@ message_cache::get_sent_message(const std::string& uuid) {
 		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
-	return *(it->second);
+	return it->second;
 }
 
 void
@@ -155,9 +155,6 @@ message_cache::move_sent_message_to_new(const std::string& uuid) {
 
 	if (it == sent_messages_.end()) {
 		return;
-		//std::string error_str = "can not find message with uuid " + uuid;
-		//error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
-		//throw error(error_str);
 	}
 
 	boost::shared_ptr<cached_message> msg = it->second;
@@ -173,14 +170,33 @@ message_cache::move_sent_message_to_new(const std::string& uuid) {
 }
 
 void
+message_cache::move_sent_message_to_new_front(const std::string& uuid) {
+	boost::mutex::scoped_lock lock(mutex_);
+	messages_index_t::iterator it = sent_messages_.find(uuid);
+
+	if (it == sent_messages_.end()) {
+		return;
+	}
+
+	boost::shared_ptr<cached_message> msg = it->second;
+
+	if (!msg) {
+		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
+	}
+
+	sent_messages_.erase(it);
+
+	msg->mark_as_sent(false);
+	new_messages_->push_front(msg);
+}
+
+void
 message_cache::remove_message_from_cache(const std::string& uuid) {
 	boost::mutex::scoped_lock lock(mutex_);
 	messages_index_t::iterator it = sent_messages_.find(uuid);
 
 	if (it == sent_messages_.end()) {
-		std::string error_str = "can not find message with uuid " + uuid;
-		error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
-		throw error(error_str);
+		return;
 	}
 
 	sent_messages_.erase(it);
@@ -207,7 +223,7 @@ message_cache::is_message_expired(cached_message_ptr_t msg) {
 }
 
 void
-message_cache::process_expired_messages(std::vector<std::string>& expired_uuids) {
+message_cache::process_expired_messages(std::vector<std::pair<std::string, message_path> >& expired_uuids) {
 	boost::mutex::scoped_lock lock(mutex_);
 
 	// remove expired from sent
@@ -222,7 +238,7 @@ message_cache::process_expired_messages(std::vector<std::string>& expired_uuids)
 
 		// remove expired messages
 		if (msg->is_expired()) {
-			expired_uuids.push_back(msg->uuid());
+			expired_uuids.push_back(std::make_pair(msg->uuid(), msg->path()));
 			sent_messages_.erase(it++);
 		}
 		else {
@@ -245,7 +261,7 @@ message_cache::process_expired_messages(std::vector<std::string>& expired_uuids)
 
 		// remove expired messages
 		if (msg->is_expired()) {
-			expired_uuids.push_back(msg->uuid());
+			expired_uuids.push_back(std::make_pair(msg->uuid(), msg->path()));
 		}
 
 		++it2;

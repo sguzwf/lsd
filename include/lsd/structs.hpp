@@ -48,6 +48,13 @@ struct lsd_types {
 // main types definition
 typedef lsd_types LT;
 
+enum response_error {
+	MESSAGE_CHUNK = 1,
+	MESSAGE_CHOKE = 2,
+	EXPIRED_MESSAGE_ERROR = 520,
+	MESSAGE_QUEUE_IS_FULL = 503
+};
+
 enum logger_type {
 	STDOUT_LOGGER = 1,
 	FILE_LOGGER,
@@ -180,11 +187,12 @@ struct handle_stats {
 	handle_stats() :
 		sent_messages(0),
 		resent_messages(0),
+		bad_sent_messages(0),
 		all_responces(0),
 		normal_responces(0),
 		timedout_responces(0),
 		err_responces(0),
-		expired(0) {};
+		expired_responses(0) {};
 
 	// tatal sent msgs (with resent msgs)
 	size_t sent_messages;
@@ -192,20 +200,23 @@ struct handle_stats {
 	// timeout or queue full msgs
 	size_t resent_messages;
 
+	// messages failed during sending
+	size_t bad_sent_messages;
+
 	// all responces received count
 	size_t all_responces;
 
 	// successful responces (no errs)
 	size_t normal_responces;
 
-	// responces with timedoud msgs
+	// responces with timedout msgs
 	size_t timedout_responces;
 
 	// error responces (deadline met, failed code parsing, app err, etc.)
 	size_t err_responces;
 
 	// expired messages
-	size_t expired;
+	size_t expired_responses;
 
 	// handle queue status
 	struct msg_queue_status queue_status;

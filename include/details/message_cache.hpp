@@ -50,14 +50,15 @@ public:
 
 	size_t new_messages_count();
 	size_t sent_messages_count();
-	cached_message& get_new_message();
-	cached_message& get_sent_message(const std::string& uuid);
+	cached_message_ptr_t get_new_message();
+	cached_message_ptr_t get_sent_message(const std::string& uuid);
 	message_queue_ptr_t new_messages();
 	void move_new_message_to_sent();
 	void move_sent_message_to_new(const std::string& uuid);
+	void move_sent_message_to_new_front(const std::string& uuid);
 	void remove_message_from_cache(const std::string& uuid);
 	void make_all_messages_new();
-	void process_expired_messages(std::vector<std::string>& expired_uuids);
+	void process_expired_messages(std::vector<std::pair<std::string, message_path> >& expired_uuids);
 
 private:
 	static bool is_message_expired(cached_message_ptr_t msg);

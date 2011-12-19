@@ -69,6 +69,10 @@ public:
 							 const std::string& handle,
 							 const handle_stats& stats);
 
+	bool get_handle_stats(const std::string& service,
+						  const std::string& handle,
+						  handle_stats& stats);
+
 	void update_service_stats(const std::string& service_name,
 							  const service_stats& stats);
 

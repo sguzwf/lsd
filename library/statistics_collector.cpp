@@ -322,15 +322,16 @@ statistics_collector::all_services_json() {
 					if (handle_it != handles_stats_.end()) {
 						Json::Value handle_info;
 
-						handle_info["1 - queue pending"] = (unsigned int)handle_it->second.queue_status.pending;
-						handle_info["2 - queue sent"] = (unsigned int)handle_it->second.queue_status.sent;
-						handle_info["3 - overall sent"] = (unsigned int)handle_it->second.sent_messages;
-						handle_info["4 - resent"] = (unsigned int)handle_it->second.resent_messages;
-						handle_info["5 - timedout"] = (unsigned int)handle_it->second.timedout_responces;
-						handle_info["6 - all responces"] = (unsigned int)handle_it->second.all_responces;
-						handle_info["7 - good responces"] = (unsigned int)handle_it->second.normal_responces;
-						handle_info["8 - err responces"] = (unsigned int)handle_it->second.err_responces;
-						handle_info["9 - expired"] = (unsigned int)handle_it->second.expired;
+						handle_info["01 - queue pending"] = (unsigned int)handle_it->second.queue_status.pending;
+						handle_info["02 - queue sent"] = (unsigned int)handle_it->second.queue_status.sent;
+						handle_info["03 - overall sent"] = (unsigned int)handle_it->second.sent_messages;
+						handle_info["04 - resent"] = (unsigned int)handle_it->second.resent_messages;
+						handle_info["05 - bad sent"] = (unsigned int)handle_it->second.bad_sent_messages;
+						handle_info["06 - timedout"] = (unsigned int)handle_it->second.timedout_responces;
+						handle_info["07 - all responces"] = (unsigned int)handle_it->second.all_responces;
+						handle_info["08 - good responces"] = (unsigned int)handle_it->second.normal_responces;
+						handle_info["09 - err responces"] = (unsigned int)handle_it->second.err_responces;
+						handle_info["10 - expired"] = (unsigned int)handle_it->second.expired_responses;
 
 						service_handles[handles[i]] = handle_info;
 					}
@@ -485,6 +486,25 @@ statistics_collector::update_handle_stats(const std::string& service,
 
 	boost::mutex::scoped_lock lock(mutex_);
 	handles_stats_[std::make_pair(service, handle)] = stats;
+}
+
+bool
+statistics_collector::get_handle_stats(const std::string& service,
+						  			   const std::string& handle,
+						  			   handle_stats& stats)
+{
+	if (!is_enabled_) {
+		return false;
+	}
+
+	boost::mutex::scoped_lock lock(mutex_);
+	handle_stats_t::iterator it = handles_stats_.find(std::make_pair(service, handle));
+
+	if (it == handles_stats_.end()) {
+		return false;	
+	}
+
+	stats = it->second;
 }
 
 } // namespace lsd

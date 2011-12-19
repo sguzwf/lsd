@@ -27,6 +27,8 @@ void create_client(int add_messages_count) {
 	lsd::client c(config_path);
 	c.connect();
 
+	sleep(3);
+
 	// create message path
 	lsd::message_path path;
 	path.service_name = "karma-engine-testing";
@@ -37,7 +39,7 @@ void create_client(int add_messages_count) {
 
 	// create message policy
 	lsd::message_policy policy;
-	policy.deadline = tv.as_double() + 0.01;
+	//policy.deadline = tv.as_double() + 10.0;
 
 	// create message data
 	std::map<std::string, int> event;

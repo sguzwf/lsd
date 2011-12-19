@@ -65,7 +65,7 @@ private:
 								std::string& response);
 
 	static const int curl_fetcher_timeout = 1;
-	static const int hosts_ping_timeout = 1;
+	static const int hosts_ping_timeout = 10;
 
 private:
 	boost::shared_ptr<configuration> config_;

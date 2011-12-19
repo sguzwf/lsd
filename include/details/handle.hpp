@@ -21,6 +21,8 @@
 
 #include <zmq.hpp>
 
+#include <msgpack.hpp>
+
 #include <boost/shared_ptr.hpp>
 #include <boost/utility.hpp>
 #include <boost/thread/thread.hpp>
@@ -92,14 +94,17 @@ private:
 	void dispatch_control_messages(int type, socket_ptr_t& main_socket);
 
 	// working with messages
-	void dispatch_next_available_message(socket_ptr_t main_socket);
+	bool dispatch_next_available_message(socket_ptr_t main_socket);
 	void connect_zmq_socket_to_hosts(socket_ptr_t& socket,
 									 hosts_info_list_t& hosts);
 
 	bool check_for_responses(socket_ptr_t& main_socket);
 	void dispatch_responces(socket_ptr_t& main_socket);
 
+	void enqueue_response(cached_response_prt_t response);
+
 	// send collected statistics to global stats collector
+	handle_stats& get_statistics();
 	void update_statistics();
 
 	boost::shared_ptr<base_logger> logger();
@@ -154,12 +159,15 @@ handle<LSD_T>::handle(const handle_info<LSD_T>& info,
 	is_running_ = true;
 	thread_ = boost::thread(&handle<LSD_T>::dispatch_messages, this);
 
+	get_statistics();
 	update_statistics();
 }
 
 template <typename LSD_T>
 handle<LSD_T>::~handle() {
+	get_statistics();
 	update_statistics();
+
 	kill();
 
 	zmq_control_socket_->close();
@@ -203,22 +211,14 @@ handle<LSD_T>::dispatch_messages() {
 				}
 			}
 		}
-
+	
 		// send new message if any
 		if (is_running_ && is_connected_) {
-			dispatch_next_available_message(main_socket);
+			if (dispatch_next_available_message(main_socket)) {
+				++statistics_.sent_messages;
+			}
 		}
 
-		// check for expired messages
-		if (is_connected_ && is_running_) {
-			std::vector<std::string> expired_uuids;
-			messages_cache()->process_expired_messages(expired_uuids);
-			statistics_.expired += expired_uuids.size();
-		}
-
-		update_statistics();
-
-		/*
 		// check for message responces
 		bool received_response = false;
 		if (is_connected_ && is_running_) {
@@ -229,7 +229,31 @@ handle<LSD_T>::dispatch_messages() {
 		if (is_connected_ && is_running_ && received_response) {
 			dispatch_responces(main_socket);
 		}
+
+		/*
+		// check for expired messages
+		if (is_connected_ && is_running_) {
+			std::vector<std::pair<std::string, message_path> > expired;
+			messages_cache()->process_expired_messages(expired);
+
+			// put expired messages to response queue
+			for (size_t i = 0; i < expired.size(); ++i) {
+				// shortcuts
+				std::string& uuid = expired[i].first;
+				message_path& path = expired[i].second;
+				std::string error_msg = "the job has expired";
+
+				// create response
+				cached_response_prt_t response;
+				response.reset(new cached_response(uuid, path, EXPIRED_MESSAGE_ERROR, error_msg));
+				enqueue_response(response);
+
+				++statistics_.expired_responses;
+			}
+		}
 		*/
+
+		update_statistics();
 	}
 
 	control_socket.reset();
@@ -249,6 +273,13 @@ handle<LSD_T>::establish_control_conection(socket_ptr_t& control_socket) {
 		control_socket->setsockopt(ZMQ_LINGER, &timeout, sizeof(timeout));
 		control_socket->connect(conn_str.c_str());
 		receiving_control_socket_ok_ = true;
+	}
+}
+
+template <typename LSD_T> void
+handle<LSD_T>::enqueue_response(cached_response_prt_t response) {
+	if (response_callback_) {
+		//response_callback_(response);
 	}
 }
 
@@ -392,7 +423,7 @@ handle<LSD_T>::connect_zmq_socket_to_hosts(socket_ptr_t& socket,
 	}
 }
 
-template <typename LSD_T> void
+template <typename LSD_T> bool
 handle<LSD_T>::dispatch_next_available_message(socket_ptr_t main_socket) {
 	// validate socket
 	if (!main_socket) {
@@ -404,42 +435,45 @@ handle<LSD_T>::dispatch_next_available_message(socket_ptr_t main_socket) {
 
 	// send new message if any
 	if (messages_cache()->new_messages_count() == 0) {
-		return;
+		return false;
 	}
 
 	try {
-		cached_message& new_msg = messages_cache()->get_new_message();
+		boost::shared_ptr<cached_message> new_msg = messages_cache()->get_new_message();
 
 		// send header
 		zmq::message_t empty_message(0);
 		if (true != main_socket->send(empty_message, ZMQ_SNDMORE)) {
-			return;
+			++statistics_.bad_sent_messages;
+			return false;
 		}
 
 		// send envelope
-		std::string msg_header = new_msg.json();
+		std::string msg_header = new_msg->json();
 		size_t header_size = msg_header.length();
 		zmq::message_t header(header_size);
 		memcpy((void *)header.data(), msg_header.c_str(), header_size);
 
 		if (true != main_socket->send(header, ZMQ_SNDMORE)) {
-			return;
+			++statistics_.bad_sent_messages;
+			return false;
 		}
 
 		// send data
-		size_t data_size = new_msg.data().size();
+		size_t data_size = new_msg->data().size();
 		zmq::message_t message(data_size);
 
 		if (data_size > 0) {
-			memcpy((void *)message.data(), new_msg.data().data(), data_size);
+			memcpy((void *)message.data(), new_msg->data().data(), data_size);
 		}
 
 		if (true != main_socket->send(message)) {
-			return;
+			++statistics_.bad_sent_messages;
+			return false;
 		}
 
 		// assign message flags
-		new_msg.mark_as_sent(true);
+		new_msg->mark_as_sent(true);
 
 		// move message to sent
 		messages_cache()->move_new_message_to_sent();
@@ -451,6 +485,8 @@ handle<LSD_T>::dispatch_next_available_message(socket_ptr_t main_socket) {
 		error_msg += ex.what();
 		throw error(error_msg);
 	}
+
+	return true;
 }
 
 template <typename LSD_T> void
@@ -464,7 +500,6 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 		try {
 			// receive reply header
 			if (!main_socket->recv(&reply, ZMQ_NOBLOCK)) {
-				logger()->log(PLOG_ERROR, "bad head");
 				break;
 			}
 
@@ -476,7 +511,7 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 
 			// get envelope json string
 			json_header = std::string((const char*)reply.data(), reply.size());
-			logger()->log(PLOG_DEBUG, "received header: %s", json_header.c_str());
+			//logger()->log(PLOG_DEBUG, "received header: %s", json_header.c_str());
 
 			bool is_response_completed = false;
 			std::string uuid;
@@ -506,29 +541,66 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 				throw error(error_msg);
 			}
 
-			if (error_code != 0) {
-				// get message from sent cache
-				cached_message& sent_msg = messages_cache()->get_sent_message(uuid);
+			bool fetched_message = false;
 
-				// create response object
-				cached_response_prt_t new_response;
-				new_response.reset(new cached_response(uuid, sent_msg.path(), error_code, error_message));
-
-				// remove message from cache
-				messages_cache()->remove_message_from_cache(uuid);
-
-				// invoke response callback
-				response_callback_(new_response);
+			// get message from sent cache
+			boost::shared_ptr<cached_message> sent_msg;
+			try {
+				sent_msg = messages_cache()->get_sent_message(uuid);
+				fetched_message = true;
+			}
+			catch (...) {
 			}
 
-			/*
+			// just send message again
+			if (error_code == MESSAGE_QUEUE_IS_FULL) {
+				if (fetched_message) {
+					messages_cache()->move_sent_message_to_new_front(uuid);
+					++statistics_.resent_messages;
+					update_statistics();
+				}
+				break;
+			}
+
+			if (error_code != 0) {
+				logger()->log(PLOG_DEBUG, "error code: %d, message: %s", error_code, error_message.c_str());
+
+				// if we could not get message from cache, we assume, lsd has already processed it
+				// otherwise — make response!
+				if (fetched_message) {
+					
+					// create response object
+					cached_response_prt_t new_response;
+					new_response.reset(new cached_response(uuid, sent_msg->path(), error_code, error_message));
+					
+					// remove message from cache
+					messages_cache()->remove_message_from_cache(uuid);
+					enqueue_response(new_response);
+
+					// statistics
+					++statistics_.err_responces;
+
+					if (error_code == EXPIRED_MESSAGE_ERROR) {
+						++statistics_.expired_responses;
+					}
+					else {
+						++statistics_.err_responces;
+					}
+
+					++statistics_.all_responces;
+					update_statistics();
+				}
+
+				break;
+			}
+
 			// receive data
-			if (!is_response_completed && error_code == 0) {
-				logger()->log(PLOG_DEBUG, "responce not completed");
-				// receive chunk data
+			if (!is_response_completed) {
+				//logger()->log(PLOG_DEBUG, "responce not completed");
+
+				// receive data chunk
 				if (!main_socket->recv(&reply)) {
 					logger()->log(PLOG_DEBUG, "bad data");
-					receiving_failed = true;
 					break;
 				}
 
@@ -538,30 +610,34 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 				msgpack::object obj = msg.get();
 				std::stringstream stream;
 				stream << obj;
-				logger()->log(PLOG_DEBUG, "received data: %s", stream.str().c_str());
-			}
+				//logger()->log(PLOG_DEBUG, "received data: %s", stream.str().c_str());
 
-			if (error_code != 0) {
-				logger()->log(PLOG_DEBUG, "err code");
-				messages_cache()->remove_message_from_cache(uuid);
+				if (fetched_message) {
+					++statistics_.normal_responces;
+					++statistics_.all_responces;
+					update_statistics();
 
-				//response_callback_
-
-				// decrement queue size
-				receiving_failed = true;
-
-				logger()->log(PLOG_DEBUG, "header: %s", json_header.c_str());
-				++err_responces_count;
-			}
-			else {
-				if (is_response_completed) {
-					logger()->log(PLOG_DEBUG, "responce completed");
-					messages_cache()->remove_message_from_cache(uuid);
-					// decrement queue size
-					++responces_count;
+					cached_response_prt_t new_response;
+					new_response.reset(new cached_response(uuid, sent_msg->path(), reply.data(), reply.size()));
+					new_response->set_error(MESSAGE_CHUNK, "");
+					enqueue_response(new_response);
 				}
 			}
-			*/
+			else {
+				//logger()->log(PLOG_DEBUG, "responce completed");
+				messages_cache()->remove_message_from_cache(uuid);
+				
+				if (fetched_message) {
+					++statistics_.normal_responces;
+					++statistics_.all_responces;
+					update_statistics();
+
+					cached_response_prt_t new_response;
+					new_response.reset(new cached_response(uuid, sent_msg->path(), reply.data(), reply.size()));
+					new_response->set_error(MESSAGE_CHOKE, "");
+					enqueue_response(new_response);
+				}
+			}
 		}
 		catch (const std::exception& ex) {
 			std::string error_msg = "service: " + info_.service_name_;
@@ -572,12 +648,20 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 			break;
 		}
 	}
+}
 
-	// increment queue size
-	// RESPONSE
-	// uuid, path, data, size
+template <typename LSD_T> handle_stats&
+handle<LSD_T>::get_statistics() {
 
-	// lsd service, RESPONSE
+	handle_stats tmp_stats;
+	if (context()->stats()->get_handle_stats(info_.service_name_,
+											 info_.name_,
+											 tmp_stats))
+	{
+		statistics_ = tmp_stats;
+	}
+
+	return statistics_;
 }
 
 template <typename LSD_T> void
@@ -593,7 +677,7 @@ handle<LSD_T>::update_statistics() {
 template <typename LSD_T> bool
 handle<LSD_T>::check_for_responses(socket_ptr_t& main_socket) {
 	if (!is_running_) {
-		return 0;
+		return false;
 	}
 
 	// validate socket
@@ -645,6 +729,9 @@ template <typename LSD_T> void
 handle<LSD_T>::kill() {
 	logger()->log(PLOG_DEBUG, "kill");
 
+	get_statistics();
+	update_statistics();
+
 	if (!is_running_) {
 		return;
 	}
@@ -660,6 +747,9 @@ template <typename LSD_T> void
 handle<LSD_T>::connect() {
 	logger()->log(PLOG_DEBUG, "connect");
 
+	get_statistics();
+	update_statistics();
+
 	if (!is_running_ || hosts_.empty() || is_connected_) {
 		return;
 	}
@@ -674,6 +764,9 @@ handle<LSD_T>::connect() {
 template <typename LSD_T> void
 handle<LSD_T>::connect(const hosts_info_list_t& hosts) {
 	logger()->log(PLOG_DEBUG, "connect with hosts");
+
+	get_statistics();
+	update_statistics();
 
 	// no hosts to connect to
 	if (!is_running_ || is_connected_ || hosts.empty()) {
@@ -692,6 +785,9 @@ handle<LSD_T>::connect(const hosts_info_list_t& hosts) {
 template <typename LSD_T> void
 handle<LSD_T>::connect_new_hosts(const hosts_info_list_t& hosts) {
 	logger()->log(PLOG_DEBUG, "connect with new hosts");
+
+	get_statistics();
+	update_statistics();
 
 	// no new hosts to connect to
 	if (!is_running_ || hosts.empty()) {
@@ -713,6 +809,9 @@ handle<LSD_T>::connect_new_hosts(const hosts_info_list_t& hosts) {
 template <typename LSD_T> void
 handle<LSD_T>::reconnect(const hosts_info_list_t& hosts) {
 	logger()->log(PLOG_DEBUG, "reconnect");
+
+	get_statistics();
+	update_statistics();
 
 	// no new hosts to connect to
 	if (!is_running_ || hosts.empty()) {
@@ -736,6 +835,9 @@ handle<LSD_T>::disconnect() {
 	boost::mutex::scoped_lock lock(mutex_);
 	logger()->log(PLOG_DEBUG, "disconnect");
 
+	get_statistics();
+	update_statistics();
+	
 	if (!is_running_) {
 		return;
 	}

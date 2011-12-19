@@ -67,6 +67,7 @@ TARGET_LINK_LIBRARIES(lsd
     crypto
     curl
     json
+    msgpack
     ${LIBUUID_LIBRARIES})
 
 #build tests if defined by config
@@ -92,6 +93,7 @@ IF(BUILD_TESTS)
         boost_unit_test_framework-mt
         boost_program_options-mt
         lsd
+        msgpack
         zmq)
 ENDIF()
 

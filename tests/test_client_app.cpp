@@ -17,6 +17,7 @@
 #include <msgpack.hpp>
 
 #include "lsd/client.hpp"
+#include "details/time_value.hpp"
 
 namespace po = boost::program_options;
 
@@ -31,14 +32,12 @@ void create_client(int add_messages_count) {
 	path.service_name = "karma-engine-testing";
 	path.handle_name = "event";
 
-	// create message path
-	lsd::message_path path2;
-	path2.service_name = "huita";
-	path2.handle_name = "crazy_handle";
+	lsd::time_value tv;
+	tv.init_from_current_time();
 
 	// create message policy
 	lsd::message_policy policy;
-	policy.deadline = 2.0;
+	policy.deadline = tv.as_double() + 0.01;
 
 	// create message data
 	std::map<std::string, int> event;
@@ -54,17 +53,7 @@ void create_client(int add_messages_count) {
 		std::string uuid1 = c.send_message(buffer.data(), buffer.size(), path, policy);
 	}
 
-	//for (int i = 0; i < add_messages_count; ++i) {
-	//	std::string uuid1 = c.send_message(buffer.data(), buffer.size(), path2, policy);
-	//}
-
-	//sleep(15);
-
-	//for (int i = 0; i < add_messages_count; ++i) {
-	//	std::string uuid1 = c.send_message(buffer.data(), buffer.size(), path, policy);
-	//}
-
-	sleep(300);
+	sleep(60);
 }
 
 int

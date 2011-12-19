@@ -164,9 +164,62 @@ struct message_policy {
     int max_timeout_retries;
 };
 
-struct msg_queue_stats {
-	size_t sent_messages_count;
-	size_t queued_messages_count;
+struct msg_queue_status {
+	msg_queue_status() :
+		pending(0),
+		sent(0) {};
+
+	// amount of messages currently queued
+	size_t pending;
+
+	// amount of sent messages that haven't yed received response from server
+	size_t sent;
+};
+
+struct handle_stats {
+	handle_stats() :
+		sent_messages(0),
+		resent_messages(0),
+		all_responces(0),
+		normal_responces(0),
+		timedout_responces(0),
+		err_responces(0),
+		expired(0) {};
+
+	// tatal sent msgs (with resent msgs)
+	size_t sent_messages;
+
+	// timeout or queue full msgs
+	size_t resent_messages;
+
+	// all responces received count
+	size_t all_responces;
+
+	// successful responces (no errs)
+	size_t normal_responces;
+
+	// responces with timedoud msgs
+	size_t timedout_responces;
+
+	// error responces (deadline met, failed code parsing, app err, etc.)
+	size_t err_responces;
+
+	// expired messages
+	size_t expired;
+
+	// handle queue status
+	struct msg_queue_status queue_status;
+};
+
+struct service_stats {
+	// <ip address, hostname>
+	std::map<LT::ip_addr, std::string> hosts;
+
+	// <handle name>
+	std::vector<std::string> handles;
+
+	// <handle name, queue_size>
+	std::map<std::string, size_t> unhandled_messages;
 };
 
 } // namespace lsd

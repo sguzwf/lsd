@@ -16,6 +16,7 @@
 #include <uuid/uuid.h>
 #include <map>
 #include <cstring>
+#include <algorithm>
 
 #include <boost/bind.hpp>
 #include <boost/tokenizer.hpp>
@@ -58,21 +59,23 @@ message_cache::config() {
 	return conf;
 }
 
-std::deque<boost::shared_ptr<cached_message> >&
+boost::shared_ptr<std::deque<boost::shared_ptr<cached_message> > >
 message_cache::new_messages() {
+	logger()->log("message_cache::new_messages");
+
 	if (!new_messages_) {
 		std::string error_str = "new messages queue object is empty at ";
 		error_str += std::string(BOOST_CURRENT_FUNCTION);
 		throw error(error_str);
 	}
 
-	return *new_messages_;
+	return new_messages_;
 }
 
 void
 message_cache::enqueue(boost::shared_ptr<cached_message> message) {
 	boost::mutex::scoped_lock lock(mutex_);
-	new_messages().push_back(message);
+	new_messages_->push_back(message);
 }
 
 void
@@ -85,7 +88,7 @@ message_cache::append_message_queue(message_queue_ptr_t queue) {
 	}
 
 	// append messages
-	new_messages().insert(new_messages_->end(), queue->begin(), queue->end());
+	new_messages_->insert(new_messages_->end(), queue->begin(), queue->end());
 }
 
 cached_message&
@@ -93,19 +96,19 @@ message_cache::get_new_message() {
 	boost::mutex::scoped_lock lock(mutex_);
 
 	// validate message
-	if (!new_messages().front()) {
+	if (!new_messages_->front()) {
 		std::string error_str = "empty message object at ";
 		error_str += std::string(BOOST_CURRENT_FUNCTION);
 		throw error(error_str);
 	}
 
-	return *(new_messages().front());
+	return *(new_messages_->front());
 }
 
 size_t
 message_cache::new_messages_count() {
 	boost::mutex::scoped_lock lock(mutex_);
-	return new_messages().size();
+	return new_messages_->size();
 }
 
 size_t
@@ -135,14 +138,14 @@ message_cache::get_sent_message(const std::string& uuid) {
 void
 message_cache::move_new_message_to_sent() {
 	boost::mutex::scoped_lock lock(mutex_);
-	boost::shared_ptr<cached_message> msg = new_messages().front();
+	boost::shared_ptr<cached_message> msg = new_messages_->front();
 
 	if (!msg) {
 		throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 	}
 
 	sent_messages_.insert(std::make_pair(msg->uuid(), msg));
-	new_messages().pop_front();
+	new_messages_->pop_front();
 }
 
 void
@@ -166,7 +169,7 @@ message_cache::move_sent_message_to_new(const std::string& uuid) {
 	sent_messages_.erase(it);
 
 	msg->mark_as_sent(false);
-	new_messages().push_back(msg);
+	new_messages_->push_back(msg);
 }
 
 void
@@ -192,20 +195,24 @@ message_cache::make_all_messages_new() {
 			throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
-		new_messages().push_back(it->second);
+		new_messages_->push_back(it->second);
 	}
 
 	sent_messages_.clear();
 }
 
+bool
+message_cache::is_message_expired(cached_message_ptr_t msg) {
+	return msg->is_expired();
+}
+
 void
-message_cache::process_timed_out_messages() {
+message_cache::process_expired_messages(std::vector<std::string>& expired_uuids) {
 	boost::mutex::scoped_lock lock(mutex_);
 
-	int timedout_count = 0;
-
+	// remove expired from sent
 	messages_index_t::iterator it = sent_messages_.begin();
-	for (; it != sent_messages_.end(); ++it) {
+	while (it != sent_messages_.end()) {
 
 		// get single sent message
 		boost::shared_ptr<cached_message> msg = it->second;
@@ -213,20 +220,41 @@ message_cache::process_timed_out_messages() {
 			throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
 		}
 
-		// check whether it timed out
+		// remove expired messages
 		if (msg->is_expired()) {
-			// move message to new
-			msg->mark_as_sent(false);
-			new_messages().push_back(msg);
-
-			// remove from sent messages
+			expired_uuids.push_back(msg->uuid());
 			sent_messages_.erase(it++);
-			++timedout_count;
 		}
 		else {
 			++it;
 		}
 	}
+
+	if (!new_messages_) {
+		throw error("empty pending message queue object at " + std::string(BOOST_CURRENT_FUNCTION));
+	}
+
+	message_queue_t::iterator it2 = new_messages_->begin();
+	while (it2 != new_messages_->end()) {
+		// get single pending message
+		boost::shared_ptr<cached_message> msg = *it2;
+
+		if (!msg) {
+			throw error("empty cached message object at " + std::string(BOOST_CURRENT_FUNCTION));
+		}
+
+		// remove expired messages
+		if (msg->is_expired()) {
+			expired_uuids.push_back(msg->uuid());
+		}
+
+		++it2;
+	}
+
+	new_messages_->erase(std::remove_if(new_messages_->begin(),
+										new_messages_->end(),
+										&message_cache::is_message_expired),
+						 new_messages_->end());
 }
 
 } // namespace lsd

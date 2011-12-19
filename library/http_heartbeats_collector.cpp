@@ -24,8 +24,10 @@
 
 namespace lsd {
 
-http_heartbeats_collector::http_heartbeats_collector(boost::shared_ptr<configuration> config, boost::shared_ptr<zmq::context_t> zmq_context) :
-	config_(config), zmq_context_(zmq_context)
+http_heartbeats_collector::http_heartbeats_collector(boost::shared_ptr<configuration> config,
+													 boost::shared_ptr<zmq::context_t> zmq_context) :
+	config_(config),
+	zmq_context_(zmq_context)
 {
 	logger_.reset(new base_logger);
 }
@@ -51,7 +53,8 @@ http_heartbeats_collector::run() {
 	}
 
 	// create hosts pinger
-	refresher_.reset(new refresher(boost::bind(&http_heartbeats_collector::services_ping_callback, this), hosts_ping_timeout));
+	boost::function<void()> f = boost::bind(&http_heartbeats_collector::services_ping_callback, this);
+	refresher_.reset(new refresher(f, hosts_ping_timeout));
 }
 
 void
@@ -125,7 +128,7 @@ http_heartbeats_collector::get_metainfo_from_host(const service_info_t& s_info,
 	std::string connection_str = "tcp://" + host_ip_str + ":";
 	connection_str += boost::lexical_cast<std::string>(s_info.control_port_);
 
-	int timeout = 100;
+	int timeout = 0;
 	zmq_socket->setsockopt(ZMQ_LINGER, &timeout, sizeof(timeout));
 	zmq_socket->connect(connection_str.c_str());
 
@@ -168,14 +171,7 @@ http_heartbeats_collector::get_metainfo_from_host(const service_info_t& s_info,
 
 	// poll for responce
 	progress_timer timer;
-	int res = -1;
-
-	while (res <= 0) {
-		res = zmq_poll(poll_items, 1, DEFAULT_SOCKET_POLL_TIMEOUT);
-		if (timer.elapsed().milliseconds() > DEFAULT_SOCKET_PING_TIMEOUT) {
-			break;
-		}
-	}
+	int res = zmq_poll(poll_items, 1, DEFAULT_SOCKET_POLL_TIMEOUT);
 
 	if (res <= 0) {
 		return false;

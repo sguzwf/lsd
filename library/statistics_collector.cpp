@@ -23,6 +23,7 @@
 #include "details/error.hpp"
 #include "details/smart_logger.hpp"
 #include "lsd/structs.hpp"
+#include "details/host_info.hpp"
 
 namespace lsd {
 
@@ -239,6 +240,8 @@ statistics_collector::cache_stats_json() const {
 
 std::string
 statistics_collector::all_services_json() {
+	boost::mutex::scoped_lock lock(mutex_);
+
 	Json::FastWriter writer;
 	Json::Value root;
 
@@ -249,45 +252,118 @@ statistics_collector::all_services_json() {
 	cache_info["3 - free bytes"] = (unsigned int)(config()->max_message_cache_size() - used_cache_size_);
 	root["1 - cache info"] = cache_info;
 
-	// queues tatals info
-	Json::Value messages_statistics;
-
+	// queues totals info
 	size_t total_queued_messages = 0;
-	{
-		boost::mutex::scoped_lock lock(mutex_);
-		service_stats_t::iterator it = services_queued_.begin();
-		for (; it != services_queued_.end(); ++it) {
-			total_queued_messages += it->second;
-		}
-	}
-	messages_statistics["1 - queued"] = (int)total_queued_messages;
-
 	size_t total_unhandled_messages = 0;
-	{
-		//boost::mutex::scoped_lock lock(mutex_);
-		//service_stats_t::iterator it = services_unhandled_.begin();
-		//for (; it != services_unhandled_.end(); ++it) {
-		//	total_unhandled_messages += it->second;
-		//}
-	}
-	messages_statistics["2 - unhandled"] = (int)total_unhandled_messages;
-	root["2 - messages statistics"] = messages_statistics;
 
-	// services
+	Json::Value messages_statistics;
 	typedef configuration::services_list_t slist_t;
 	const slist_t& services = config()->services_list();
 
-	slist_t::const_iterator it = services.begin();
-	for (; it != services.end(); ++it) {
+	// get unhandled messages total
+	slist_t::const_iterator services_it = services.begin();
+	for (; services_it != services.end(); ++services_it) {
+
+		// get service stats
+		services_stats_t::iterator service_stat_it = services_stats_.find(services_it->second.name_);
+		if (service_stat_it != services_stats_.end()) {
+			std::map<std::string, size_t>& umsgs = service_stat_it->second.unhandled_messages;
+
+			// unhandled messages
+			std::map<std::string, size_t>::iterator uit = umsgs.begin();
+			for (; uit != umsgs.end(); ++uit) {
+				total_unhandled_messages += uit->second;
+			}
+		}
+	}
+	messages_statistics["1 - queued"] = (unsigned int)total_queued_messages;
+	messages_statistics["2 - unhandled"] = (unsigned int)total_unhandled_messages;
+	root["2 - messages statistics"] = messages_statistics;
+
+	// services
+	services_it = services.begin();
+	for (; services_it != services.end(); ++services_it) {
 		Json::Value service_info;
-		service_info["1 - cocaine app"] = it->second.app_name_;
-		service_info["2 - instance"] = it->second.instance_;
-		service_info["3 - description"] = it->second.description_;
-		service_info["4 - control port"] = it->second.hosts_url_;
-		service_info["5 - hosts url"] = it->second.hosts_url_;
+		service_info["1 - cocaine app"] = services_it->second.app_name_;
+		service_info["2 - instance"] = services_it->second.instance_;
+		service_info["3 - description"] = services_it->second.description_;
+		service_info["4 - control port"] = services_it->second.hosts_url_;
+		service_info["5 - hosts url"] = services_it->second.hosts_url_;
+
+		// get service stats
+		services_stats_t::iterator service_stat_it = services_stats_.find(services_it->second.name_);
+		if (service_stat_it != services_stats_.end()) {
+			// get references
+			std::map<LT::ip_addr, std::string>& hosts = service_stat_it->second.hosts;
+			std::map<std::string, size_t>& umsgs = service_stat_it->second.unhandled_messages;
+			std::vector<std::string>& handles = service_stat_it->second.handles;
+
+			// unhandled messages
+			size_t unhandled_count = 0;
+			std::map<std::string, size_t>::iterator uit = umsgs.begin();
+			for (; uit != umsgs.end(); ++uit) {
+				unhandled_count += uit->second;
+			}
+			service_info["6 - unhandled messages count"] = (unsigned int)unhandled_count;
+
+			// service handles
+			if (handles.empty()) {
+				service_info["7 - handles"] = "no handles";
+			}
+			else {
+				Json::Value service_handles;
+
+				for (size_t i = 0; i < handles.size(); ++i) {
+
+					// get handle statistics
+					std::pair<std::string, std::string> stat_key(services_it->second.name_, handles[i]);
+					handle_stats_t::iterator handle_it = handles_stats_.find(stat_key);
+
+					if (handle_it != handles_stats_.end()) {
+						Json::Value handle_info;
+
+						handle_info["1 - queue pending"] = (unsigned int)handle_it->second.queue_status.pending;
+						handle_info["2 - queue sent"] = (unsigned int)handle_it->second.queue_status.sent;
+						handle_info["3 - overall sent"] = (unsigned int)handle_it->second.sent_messages;
+						handle_info["4 - resent"] = (unsigned int)handle_it->second.resent_messages;
+						handle_info["5 - timedout"] = (unsigned int)handle_it->second.timedout_responces;
+						handle_info["6 - all responces"] = (unsigned int)handle_it->second.all_responces;
+						handle_info["7 - good responces"] = (unsigned int)handle_it->second.normal_responces;
+						handle_info["8 - err responces"] = (unsigned int)handle_it->second.err_responces;
+						handle_info["9 - expired"] = (unsigned int)handle_it->second.expired;
+
+						service_handles[handles[i]] = handle_info;
+					}
+					else {
+						service_handles[handles[i]] = "no handle statistics";
+					}
+				}
+
+				service_info["7 - handles"] = service_handles;
+			}
+
+			// active hosts list
+			if (hosts.empty()){
+				service_info["8 - active hosts"] = "no hosts";
+			}
+			else {
+				Json::Value service_hosts;
+				std::map<LT::ip_addr, std::string>::iterator hosts_it = hosts.begin();
+				size_t counter = 1;
+				for (; hosts_it != hosts.end(); ++hosts_it) {
+					std::string key = "host " + boost::lexical_cast<std::string>(counter);
+					std::string value = host_info<LT>::string_from_ip(hosts_it->first);
+					value += "(" + hosts_it->second + ")";
+					service_hosts[key] = value;
+					++counter;
+				}
+
+				service_info["8 - active hosts"] = service_hosts;
+			}
+		}
 
 		Json::Value service;
-		service[it->first] = service_info;
+		service[services_it->first] = service_info;
 		root["3 - services"] = service;
 	}
 
@@ -378,30 +454,8 @@ statistics_collector::enable(bool value) {
 	is_enabled_ = value;
 }
 
-/*
 void
-statistics_collector::set_service_stats(const std::string& service, const std::string& handle, size_t msg_queue_size) {
-	if (!is_enabled_) {
-		return;
-	}
-
-	boost::mutex::scoped_lock lock(mutex_);
-	service_stats_t::iterator it = services_stats_.find(std::make_pair(service, handle));
-
-	if (msg_queue_size == 0) {
-		if (it != services_stats_.end()) {
-			services_stats_.erase(it);
-		}
-
-		return;
-	}
-
-	services_stats_[std::make_pair(service, handle)] = msg_queue_size;
-}
-*/
-
-void
-statistics_collector::set_used_cache_size(size_t used_cache_size) {
+statistics_collector::update_used_cache_size(size_t used_cache_size) {
 	if (!is_enabled_) {
 		return;
 	}
@@ -411,28 +465,26 @@ statistics_collector::set_used_cache_size(size_t used_cache_size) {
 }
 
 void
-statistics_collector::set_queued_messages_count(const service_stats_t& services_stats) {
+statistics_collector::update_service_stats(const std::string& service_name, const service_stats& stats) {
 	if (!is_enabled_) {
 		return;
 	}
 
 	boost::mutex::scoped_lock lock(mutex_);
-	services_queued_ = services_stats;
+	services_stats_[service_name] = stats;
 }
 
 void
-statistics_collector::set_service_unhandled_stats(const service_stats_t& services_unhandled) {
-	logger()->log("UPDATE");
+statistics_collector::update_handle_stats(const std::string& service,
+										  const std::string& handle,
+										  const handle_stats& stats)
+{
 	if (!is_enabled_) {
 		return;
 	}
 
-	//boost::mutex::scoped_lock lock(mutex_);
-	service_stats_t::const_iterator it = services_unhandled.begin();
-	for (; it != services_unhandled.end(); ++it) {
-		//services_unhandled_[it->first] = it->second;
-		logger()->log("count: %d", it->second);
-	}
+	boost::mutex::scoped_lock lock(mutex_);
+	handles_stats_[std::make_pair(service, handle)] = stats;
 }
 
 } // namespace lsd

@@ -99,6 +99,9 @@ private:
 	bool check_for_responses(socket_ptr_t& main_socket);
 	void dispatch_responces(socket_ptr_t& main_socket);
 
+	// send collected statistics to global stats collector
+	void update_statistics();
+
 	boost::shared_ptr<base_logger> logger();
 	boost::shared_ptr<configuration> config();
 	boost::shared_ptr<lsd::context> context();
@@ -119,6 +122,8 @@ private:
 	bool receiving_control_socket_ok_;
 
 	responce_callback_t response_callback_;
+
+	handle_stats statistics_;
 };
 
 template <typename LSD_T>
@@ -140,15 +145,21 @@ handle<LSD_T>::handle(const handle_info<LSD_T>& info,
 	// create control socket
 	std::string conn_str = "inproc://service_control_" + info_.service_name_ + "_" + info_.name_;
 	zmq_control_socket_.reset(new zmq::socket_t(*(context()->zmq_context()), ZMQ_PAIR));
+
+	int timeout = 0;
+	zmq_control_socket_->setsockopt(ZMQ_LINGER, &timeout, sizeof(timeout));
 	zmq_control_socket_->bind(conn_str.c_str());
 
 	// run main thread
 	is_running_ = true;
 	thread_ = boost::thread(&handle<LSD_T>::dispatch_messages, this);
+
+	update_statistics();
 }
 
 template <typename LSD_T>
 handle<LSD_T>::~handle() {
+	update_statistics();
 	kill();
 
 	zmq_control_socket_->close();
@@ -198,10 +209,14 @@ handle<LSD_T>::dispatch_messages() {
 			dispatch_next_available_message(main_socket);
 		}
 
-		// check for timed out messages
-		//if (is_connected_ && is_running_) {
-		//	messages_cache()->process_timed_out_messages();
-		//}
+		// check for expired messages
+		if (is_connected_ && is_running_) {
+			std::vector<std::string> expired_uuids;
+			messages_cache()->process_expired_messages(expired_uuids);
+			statistics_.expired += expired_uuids.size();
+		}
+
+		update_statistics();
 
 		/*
 		// check for message responces
@@ -219,6 +234,8 @@ handle<LSD_T>::dispatch_messages() {
 
 	control_socket.reset();
 	main_socket.reset();
+
+	update_statistics();
 }
 
 template <typename LSD_T> void
@@ -227,6 +244,9 @@ handle<LSD_T>::establish_control_conection(socket_ptr_t& control_socket) {
 
 	if (control_socket.get()) {
 		std::string conn_str = "inproc://service_control_" + info_.service_name_ + "_" + info_.name_;
+
+		int timeout = 0;
+		control_socket->setsockopt(ZMQ_LINGER, &timeout, sizeof(timeout));
 		control_socket->connect(conn_str.c_str());
 		receiving_control_socket_ok_ = true;
 	}
@@ -359,10 +379,8 @@ handle<LSD_T>::connect_zmq_socket_to_hosts(socket_ptr_t& socket,
 			std::string ip = host_info<LSD_T>::string_from_ip(hosts[i].ip_);
 			connection_str = "tcp://" + ip + ":" + port;
 			logger()->log(PLOG_DEBUG, "handle connection str: %s", connection_str.c_str());
-			//int timeout = 100;
-			//socket->setsockopt(ZMQ_LINGER, &timeout, sizeof(timeout));
-			//std::string ident = info_.service_name_ + info_.name_;
-			//socket->setsockopt(ZMQ_IDENTITY, ident.c_str(), ident.length());
+			int timeout = 0;
+			socket->setsockopt(ZMQ_LINGER, &timeout, sizeof(timeout));
 			socket->connect(connection_str.c_str());
 		}
 	}
@@ -562,6 +580,16 @@ handle<LSD_T>::dispatch_responces(socket_ptr_t& main_socket) {
 	// lsd service, RESPONSE
 }
 
+template <typename LSD_T> void
+handle<LSD_T>::update_statistics() {
+	statistics_.queue_status.pending = messages_cache()->new_messages_count();
+	statistics_.queue_status.sent = messages_cache()->sent_messages_count();
+
+	context()->stats()->update_handle_stats(info_.service_name_,
+											info_.name_,
+											statistics_);
+}
+
 template <typename LSD_T> bool
 handle<LSD_T>::check_for_responses(socket_ptr_t& main_socket) {
 	if (!is_running_) {
@@ -741,6 +769,8 @@ template <typename LSD_T> void
 handle<LSD_T>::enqueue_message(boost::shared_ptr<cached_message> message) {
 	boost::mutex::scoped_lock lock(mutex_);
 	messages_cache()->enqueue(message);
+
+	update_statistics();
 }
 
 template <typename LSD_T> boost::shared_ptr<lsd::context>

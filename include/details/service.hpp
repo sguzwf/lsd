@@ -100,6 +100,8 @@ private:
 										 const handles_info_list_t& handles);
 
 	void responce_callback(cached_response_prt_t response);
+
+	// send collected statistics to global stats collector
 	void update_statistics();
 
 	boost::shared_ptr<base_logger> logger();
@@ -128,6 +130,9 @@ private:
 	// total cache size
 	size_t cache_size_;
 
+	// statistics
+	service_stats stats_;
+
 	// synchronization
 	boost::mutex mutex_;
 };
@@ -138,6 +143,7 @@ service<LSD_T>::service(const service_info<LSD_T>& info, boost::shared_ptr<lsd::
 	context_(context),
 	cache_size_(0)
 {
+	update_statistics();
 }
 
 template <typename LSD_T> boost::shared_ptr<lsd::context>
@@ -224,21 +230,16 @@ service<LSD_T>::responce_callback(cached_response_prt_t response) {
 
 template <typename LSD_T> void
 service<LSD_T>::update_statistics() {
+
+	// reset containers
+	stats_.unhandled_messages.clear();
+	stats_.handles.clear();
+
+	// gather statistics of unhandled messages
 	unhandled_messages_map_t::iterator it = unhandled_messages_.begin();
-
-	// statistics of messages queued to handles
-	typedef std::map<std::pair<std::string, std::string>, size_t> service_stats_t;
-	service_stats_t unhandled_messages_stats_;
-	unhandled_messages_stats_.clear();
-
 	for (; it != unhandled_messages_.end(); ++it) {
-		typedef std::pair<std::string, std::string> key_type;
-
-		// service name, handle name
-		key_type key = std::make_pair(info_.name_, it->first);
-
 		if (it->second) {
-			unhandled_messages_stats_[key] = it->second->size();
+			stats_.unhandled_messages[it->first] = it->second->size();
 		}
 		else {
 			std::string error_str = "found empty unhandled messages queue object!";
@@ -248,8 +249,26 @@ service<LSD_T>::update_statistics() {
 		}
 	}
 
+	// gather hosts info
+	stats_.hosts = hosts_;
+
+	// gather handles info
+	typename handles_map_t::iterator it2 = handles_.begin();
+
+	for (; it2 != handles_.end(); ++it2) {
+		if (it2->second) {
+			stats_.handles.push_back(it2->first);
+		}
+		else {
+			std::string error_str = "found empty handle object!";
+			error_str += " service: " + info_.name_ + " handle: " + it2->first;
+			error_str += " at " + std::string(BOOST_CURRENT_FUNCTION);
+			throw error(error_str);
+		}
+	}
+
 	// post collected statistics to collector obj
-	context()->stats()->set_service_unhandled_stats(unhandled_messages_stats_);
+	context()->stats()->update_service_stats(info_.name_, stats_);
 }
 
 template <typename LSD_T> void
@@ -301,6 +320,9 @@ service<LSD_T>::refresh_hosts_and_handles(const hosts_info_list_t& hosts,
 
 	// create new handles if any
 	create_new_handles(new_handles, hosts_v);
+
+	lock.lock();
+	update_statistics();
 }
 
 template <typename LSD_T> void
@@ -422,9 +444,7 @@ service<LSD_T>::remove_outstanding_handles(const handles_info_list_t& handles) {
 			}
 
 			// move handle messages to unhandled messages map in service
-			messages_deque_ptr_t handle_msg_queue;
-			handle_msg_queue.reset(new cached_messages_deque_t);
-			*handle_msg_queue = msg_cache->new_messages();
+			messages_deque_ptr_t handle_msg_queue = msg_cache->new_messages();
 
 			// validate handle queue
 			if (!handle_msg_queue) {
@@ -526,7 +546,6 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 		if (handle_ptr) {
 			handle_ptr->enqueue_message(message);
 			cache_size_ += message->container_size();
-			context()->stats()->set_used_cache_size(cache_size_);
 		}
 		else {
 			std::string error_str = "handle object " + handle_name;
@@ -561,11 +580,10 @@ service<LSD_T>::send_message(cached_message_prt_t message) {
 			queue_ptr->push_back(message);
 		}
 
-		update_statistics();
-
 		cache_size_ += message->container_size();
-		context()->stats()->set_used_cache_size(cache_size_);
 	}
+
+	update_statistics();
 }
 
 template <typename LSD_T> size_t

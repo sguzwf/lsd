@@ -50,15 +50,6 @@
 				"instance" : "default",
 				"hosts_url" : "http://deltax.dev.yandex.net",
 				"control_port" : 5000
-			},
-			
-			{
-            	"name" : "huita",
-				"description" : "trash service",
-				"app_name" : "blah-blah-blah",
-				"instance" : "default",
-				"hosts_url" : "http://deltax.dev.yandex.net",
-				"control_port" : 5000
 			}
 		]
 	}

@@ -36,11 +36,12 @@ enum statictics_req_error {
 
 class statistics_collector : private boost::noncopyable {
 public:
-	// handled queues
-	typedef std::map<std::pair<std::string, std::string>, msg_queue_stats> handles_stats_t;
+	// status of all services
+	typedef std::map<std::string, service_stats> services_stats_t;
 
-	// services queues
-	typedef std::map<std::pair<std::string, std::string>, size_t> service_stats_t;
+	// status of all handles
+	typedef std::map<std::pair<std::string, std::string>, handle_stats> handle_stats_t;
+
 
 public:
 	statistics_collector(boost::shared_ptr<configuration> config,
@@ -58,10 +59,18 @@ public:
 	void enable(bool value);
 	std::string as_json() const;
 
+	/* --- feeding statistics with collected data --- */
 
-	void set_service_unhandled_stats(const service_stats_t& services_unhandled);
-	void set_queued_messages_count(const service_stats_t& services_stats);
-	void set_used_cache_size(size_t used_cache_size);
+	// cache statistics
+	void update_used_cache_size(size_t used_cache_size);
+
+	// messages statistics from specific handle
+	void update_handle_stats(const std::string& service,
+							 const std::string& handle,
+							 const handle_stats& stats);
+
+	void update_service_stats(const std::string& service_name,
+							  const service_stats& stats);
 
 private:
 	void init();
@@ -74,13 +83,14 @@ private:
 	boost::shared_ptr<base_logger> logger();
 	boost::shared_ptr<configuration> config() const;
 
-	// collected data
+	/* --- collected data --- */
 	size_t used_cache_size_;
 
-	// queues status
-	handles_stats_t handles_stats_;      // messages assigned to handles (new/sent)
-	service_stats_t services_unhandled_; // messages unassigned to handles
-	service_stats_t services_queued_;	 // messages queued to handles
+	// services status
+	services_stats_t services_stats_;
+
+	// handles status and statistics
+	handle_stats_t handles_stats_;
 
 private:
 	bool is_enabled_;

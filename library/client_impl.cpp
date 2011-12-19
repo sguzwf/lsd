@@ -182,18 +182,6 @@ client_impl::send_message(const void* data,
 		// send message to handle
 		if (it->second) {
 			it->second->send_message(msg);
-
-			std::pair<std::string, std::string> key(path.service_name, path.handle_name);
-			service_stats_t::iterator it = queued_messages_stats_.find(key);
-			if (it == queued_messages_stats_.end()) {
-				queued_messages_stats_[key] = 1;
-			}
-			else {
-				size_t count = queued_messages_stats_[key];
-				queued_messages_stats_[key] = count + 1;
-			}
-
-			context()->stats()->set_queued_messages_count(queued_messages_stats_);
 		}
 		else {
 			std::string error_str = "object for service wth name " + path.service_name;
@@ -266,6 +254,7 @@ client_impl::messages_cache_size() const {
 
 void
 client_impl::update_messages_cache_size() {
+	// collect cache sizes of all services
 	messages_cache_size_ = 0;
 
 	services_map_t::iterator it = services_.begin();
@@ -281,6 +270,9 @@ client_impl::update_messages_cache_size() {
 			throw error(error_str);
 		}
 	}
+
+	// total size of all queues in all services
+	context()->stats()->update_used_cache_size(messages_cache_size_);
 }
 
 boost::shared_ptr<configuration>

@@ -1,3 +1,10 @@
+ATTENTION!
+====================
+Project LSD became a part of [Cocained](https://github.com/Kobolog/cocaine) as Cocaine Dealer.
+With merged sources, this current repository will never be updated.
+
+Thank you.
+
 What the hell is it?
 ====================
 
